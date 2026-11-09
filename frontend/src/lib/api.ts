@@ -6,7 +6,7 @@ export const tipoConsultaNombre:Record<TipoConsulta,string>={sin_clasificar:'Sin
 export const tiposConsulta=Object.entries(tipoConsultaNombre) as [TipoConsulta,string][];
 export const canalesOrigen:CanalOrigen[]=['Manual','WhatsApp','Correo','Formulario web','Teléfono','Otro'];
 export type Resumen = { oportunidades_activas:number; valor_potencial_usd:number; cotizaciones_pendientes:number; sin_seguimiento:number; acciones_sugeridas:number; fecha_consulta:string };
-export type Oportunidad = { id:number; cliente:string; contacto:string; producto:string; cantidad:number|null; monto_estimado_usd:number|null; estado:Estado; creada_el:string; ultimo_contacto:string; dias_sin_contacto:number; seguimiento_pendiente:boolean; proxima_accion:string|null; tipo_consulta:TipoConsulta; canal_origen:CanalOrigen; presentacion:string; packaging:string; responsable:string; fecha_seguimiento:string|null; motivo_seguimiento:string };
+export type Oportunidad = { id:number; cliente:string; contacto:string; email?:string; telefono?:string; producto:string; cantidad:number|null; monto_estimado_usd:number|null; estado:Estado; creada_el:string; ultimo_contacto:string; dias_sin_contacto:number; seguimiento_pendiente:boolean; proxima_accion:string|null; tipo_consulta:TipoConsulta; canal_origen:CanalOrigen; presentacion:string; packaging:string; responsable:string; fecha_seguimiento:string|null; motivo_seguimiento:string };
 export type Interaccion = { id:number; tipo:Tipo; descripcion:string; fecha:string };
 export type Detalle = Oportunidad & { notas:string; interacciones:Interaccion[] };
 const BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8001').replace(/\/$/, '');
@@ -30,9 +30,15 @@ export async function api<T>(path:string,options?:RequestInit):Promise<T>{
 }
 export const money=(n:number|null|undefined)=> n==null ? 'Sin estimar' : `USD ${n.toLocaleString('es-AR', {maximumFractionDigits:0})}`;
 export const dateAR=(s:string)=> new Date(`${s}T12:00:00`).toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'numeric'});
-export const estadoNombre:Record<Estado,string>={nueva:'Nueva',contactada:'Contactada',cotizada:'Cotizada',negociacion:'En negociación',ganada:'Ganada',perdida:'Perdida'};
+export const estadoNombre:Record<Estado,string>={nueva:'Nueva',contactada:'Contactada',cotizada:'Cotizada',negociacion:'En negociación',ganada:'Concretada',perdida:'No concretada'};
 
 export type ConsultaIA = {cliente:string;contacto:string;producto:string;cantidad:number|null;requisitos:string[];datos_faltantes:string[];resumen:string;respuesta_sugerida:string;tipo_consulta?:TipoConsulta;presentacion?:string;necesita_formula?:'si'|'no'|'sin_especificar';necesita_packaging?:'si'|'no'|'sin_especificar'};
 export type SeguimientoIA = {motivo:string;asunto:string;mensaje:string;consideraciones:string[]};
 
-export type ConsultaBandeja = {id:number;cliente:string;contacto:string;canal:string;texto:string;recibido_el:string;estado:'nueva'|'en_gestion'|'resuelta';oportunidad_id:number|null};
+export type Rol='ventas'|'administrador'|'gerencia';
+export const roleName:Record<Rol,string>={ventas:'Ventas',administrador:'Administrador',gerencia:'Gerencia'};
+export type UsuarioSesion={id:number;username:string;name:string;role:Rol;theme:'claro'|'oscuro'};
+export type ConsultaBandeja = {id:number;cliente:string;contacto:string;canal:string;texto:string;recibido_el:string;estado:'nueva'|'en_gestion'|'resuelta';oportunidad_id:number|null;ficha_id:number|null;leido_en:string|null;email_remitente:string;telefono_remitente:string;asunto:string};
+export type FichaConsulta = {id:number;codigo:string;oportunidad_id:number|null;titulo:string;cliente:string;contacto:string;producto:string;cantidad:number|null;tipo_consulta:TipoConsulta;presentacion:string;packaging:string;requisitos:string[];datos_faltantes:string[];resumen:string;creada_en:string;actualizada_en:string;mensajes?:ConsultaBandeja[];mensajes_count?:number};
+export type ReportData={periodo:string;desde:string;hasta:string;canal:string;responsable:string;indicadores:Record<string,number>;canales:Record<string,number>;productos_consultados:[string,number][];origen_datos:string};
+export type ReportResponse={title:string;question:string;report:string;data:ReportData;generated_at:string};

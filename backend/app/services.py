@@ -24,7 +24,7 @@ def to_opportunity(row: Row, today: date) -> dict:
         action = None
     return {
         "id": row["id"], "cliente": row["cliente"], "contacto": row["contacto"],
-        "producto": row["producto"], "cantidad": row["cantidad"],
+        "producto": row["producto"], "email": row["email"], "telefono": row["telefono"], "cantidad": row["cantidad"],
         "monto_estimado_usd": row["monto_estimado_usd"], "estado": row["estado"],
         "creada_el": row["creada_el"], "ultimo_contacto": row["ultimo_contacto"],
         "dias_sin_contacto": days, "seguimiento_pendiente": pending, "proxima_accion": action,

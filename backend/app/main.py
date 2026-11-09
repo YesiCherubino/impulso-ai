@@ -8,6 +8,7 @@ import os
 import secrets
 from openai import OpenAIError
 from . import ai, auth
+from .business_v2 import register_business_v2
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -79,6 +80,12 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
             if not auth.get_user(db_path, request.headers.get('x-session-token', '')):
                 from fastapi.responses import JSONResponse
                 return JSONResponse({'detail': 'Sesión no válida o vencida'}, status_code=401)
+        if os.getenv('AUTH_ENABLED', 'false').lower() == 'true' and request.method not in ('GET', 'HEAD', 'OPTIONS'):
+            path = request.url.path
+            user = auth.get_user(db_path, request.headers.get('x-session-token', ''))
+            if user and user.get('role') == 'gerencia' and ((path.startswith('/api/inbox') and not path.endswith('/read')) or path.startswith('/api/opportunities') or path.startswith('/api/ai/')):
+                from fastapi.responses import JSONResponse
+                return JSONResponse({'detail':'Gerencia tiene acceso de consulta, no puede modificar registros.'},status_code=403)
         return await call_next(request)
 
     @app.post('/api/auth/login')
@@ -398,7 +405,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
             if row is None:
                 raise HTTPException(404, 'Contacto comercial no encontrado')
             if row['estado'] != payload.estado:
-                con.execute("UPDATE oportunidades SET estado = ? WHERE id = ?", (payload.estado, opportunity_id))
+                con.execute("UPDATE oportunidades SET estado = ?, fecha_cierre = ? WHERE id = ?", (payload.estado, date.today().isoformat() if payload.estado in ('ganada','perdida') else None, opportunity_id))
                 con.execute("""INSERT INTO interacciones (oportunidad_id, tipo, descripcion, fecha)
                     VALUES (?, 'nota', ?, ?)""", (
                     opportunity_id,
@@ -511,6 +518,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
             logger.warning('Falló seguimiento con IA: %s', type(exc).__name__)
             raise HTTPException(503, 'No se pudo generar el correo. Verificá OpenAI e intentá nuevamente.') from exc
 
+    register_business_v2(app, db_path, reserve_ai_call)
     return app
 
 app = create_app()

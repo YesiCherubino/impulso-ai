@@ -1,135 +1,113 @@
 'use client';
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import Link from 'next/link';
-import {ArrowLeft, ArrowRight, ClipboardList, Inbox, LoaderCircle, Search, RefreshCcw} from 'lucide-react';
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import {BookText,ClipboardCopy,FileText,Inbox,Mail,MessageCircle,Plus,Search,Send,X,Check,ChevronRight,RotateCcw} from 'lucide-react';
 import Shell from '@/components/shell';
-import {api,ConsultaBandeja,ConsultaIA,Detalle,TipoConsulta,CanalOrigen,tipoConsultaNombre,tiposConsulta,canalesOrigen} from '@/lib/api';
+import {api,ConsultaBandeja,ConsultaIA,FichaConsulta,Oportunidad,TipoConsulta,tiposConsulta,tipoConsultaNombre,UsuarioSesion,CanalOrigen} from '@/lib/api';
 
-type EstadoFiltro='todas'|'nueva'|'en_gestion'|'resuelta';
-const nombreEstado={nueva:'Sin atender',en_gestion:'En gestión',resuelta:'Resuelta'};
-// Sólo precarga sugerida: la persona siempre puede corregirla antes de guardar.
-function extractFromMessage(text:string){
- const quantityMatch=text.match(/(?:producir|fabricar|pedido de|producción de|lote de)?\s*([\d][\d.,]*)\s*(?:unidades|uds?\.?|piezas)/i);
- const raw=quantityMatch?.[1].replace(/[.,](?=\d{3}(?:\D|$))/g,'').replace(/,/g,'.');
- const quantity=raw&&Number.isFinite(Number(raw))&&Number(raw)>0?String(Math.round(Number(raw))):'';
- const names=['crema corporal','jabón líquido','máscara capilar','shampoo','acondicionador','crema facial','perfume','gel de ducha'];
- const name=names.find(p=>text.toLocaleLowerCase('es').includes(p));
- const size=text.match(/\b(?:de\s+)?(\d{1,4})\s*(ml|gr|g|l)\b/i);
- return {producto:name?`${name}${size?' '+size[1]+' '+size[2]:''}`:'',cantidad:quantity};
-}
-function inferType(text:string):TipoConsulta{
- const lower=text.toLocaleLowerCase('es');
- if(/mayorista|distribuidora|distribución comercial/.test(lower))return 'mayorista';
- if(/desarroll(?:ar|o) (?:una? )?f[oó]rmula|formular (?:un|una)|nueva f[oó]rmula/.test(lower))return 'desarrollo_formula';
- if(/(?:solo |únicamente )?(?:envasar|envasado|envasamiento)/.test(lower))return 'elaboracion_envasado';
- if(/marca propia|fabricar|producci[oó]n para terceros/.test(lower))return 'fabricacion_terceros';
- return 'sin_clasificar';
-}
-function fechaHora(value:string){const date=new Date(value);return Number.isNaN(date.getTime())?value:date.toLocaleString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});}
+type Form={titulo:string;cliente:string;contacto:string;producto:string;cantidad:string;tipo_consulta:TipoConsulta;presentacion:string;packaging:string;requisitos:string;datos_faltantes:string;resumen:string;contacto_email:string;contacto_telefono:string};
+const emptyForm:Form={titulo:'',cliente:'',contacto:'',producto:'',cantidad:'',tipo_consulta:'sin_clasificar',presentacion:'',packaging:'',requisitos:'',datos_faltantes:'',resumen:'',contacto_email:'',contacto_telefono:''};
+const defaultNew={cliente:'',contacto:'',canal:'WhatsApp',texto:'',email_remitente:'',telefono_remitente:'',asunto:''};
+function dateAR(value:string){const d=new Date(value);return Number.isNaN(d.getTime())?value:d.toLocaleString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});}
+function isEmail(c:string){return c==='Correo'||c.toLowerCase().includes('mail');}
+function toForm(f:FichaConsulta|null,r:ConsultaIA|null,m:ConsultaBandeja):Form{return {
+ titulo:f?.titulo||`Consulta de ${m.cliente}`,cliente:f?.cliente||r?.cliente||m.cliente,contacto:f?.contacto||r?.contacto||m.contacto,
+ producto:f?.producto||r?.producto||'',cantidad:f?.cantidad!=null?String(f.cantidad):r?.cantidad!=null?String(r.cantidad):'',
+ tipo_consulta:f?.tipo_consulta||r?.tipo_consulta||'sin_clasificar',presentacion:f?.presentacion||r?.presentacion||'',
+ packaging:f?.packaging||'',requisitos:(f?.requisitos.length?f.requisitos:r?.requisitos||[]).join('\n'),
+ datos_faltantes:(f?.datos_faltantes.length?f.datos_faltantes:r?.datos_faltantes||[]).join('\n'),
+ resumen:f?.resumen||r?.resumen||'',contacto_email:m.email_remitente||'',contacto_telefono:m.telefono_remitente||''
+};}
+const splitLines=(s:string)=>s.split('\n').map(x=>x.trim()).filter(Boolean);
+function payloadFor(f:Form){return {titulo:f.titulo,cliente:f.cliente,contacto:f.contacto,producto:f.producto,
+ cantidad:f.cantidad?Number(f.cantidad):null,tipo_consulta:f.tipo_consulta,presentacion:f.presentacion,
+ packaging:f.packaging,requisitos:splitLines(f.requisitos),datos_faltantes:splitLines(f.datos_faltantes),resumen:f.resumen};}
+function stateText(m:ConsultaBandeja){return !m.leido_en?'No leído':m.estado==='nueva'?'Sin atender':m.estado==='en_gestion'?'En gestión':'Resuelta';}
 
 export default function BandejaConsultas(){
- const [consultas,setConsultas]=useState<ConsultaBandeja[]>([]),[seleccion,setSeleccion]=useState<number|null>(null),[filtro,setFiltro]=useState<EstadoFiltro>('todas'),[texto,setTexto]=useState('');
- const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[result,setResult]=useState<ConsultaIA|null>(null),[created,setCreated]=useState<Detalle|null>(null),[draft,setDraft]=useState(''),[copyText,setCopyText]=useState('Copiar respuesta');
- const [createOpen,setCreateOpen]=useState(false);
- const [newOpen,setNewOpen]=useState(false),[newBusy,setNewBusy]=useState(false);
- const [newForm,setNewForm]=useState<{cliente:string;contacto:string;texto:string;canal:CanalOrigen}>({cliente:'',contacto:'',texto:'',canal:'Manual'});
- const [savedDraft,setSavedDraft]=useState(''),[analysisVersion,setAnalysisVersion]=useState(0),[savingDraft,setSavingDraft]=useState(false);
- const [showContactData,setShowContactData]=useState(false);
- const [linkedDetail,setLinkedDetail]=useState<Detalle|null>(null);
- const [contactForm,setContactForm]=useState<{cliente:string;contacto:string;producto:string;cantidad:string;tipo_consulta:TipoConsulta;presentacion:string;packaging:string}>({cliente:'',contacto:'',producto:'',cantidad:'',tipo_consulta:'sin_clasificar',presentacion:'',packaging:''});
- const usedUrlRef=useRef(false);
- function beginContact(){
-  if(!actual || actual.estado==='resuelta' || actual.oportunidad_id)return;
-  const inferred=extractFromMessage(actual.texto);
-  setContactForm({cliente:result?.cliente||actual.cliente,contacto:result?.contacto||actual.contacto,producto:result?.producto||inferred.producto,cantidad:result?.cantidad!=null?String(result.cantidad):inferred.cantidad,tipo_consulta:result?.tipo_consulta||inferType(actual.texto),presentacion:result?.presentacion||'',packaging:result?.necesita_packaging==='si'?'Requiere packaging (confirmar especificaciones)':''});
-  setCreateOpen(true);setShowContactData(false);setError('');
+ const [items,setItems]=useState<ConsultaBandeja[]>([]),[fichas,setFichas]=useState<FichaConsulta[]>([]),[contacts,setContacts]=useState<Oportunidad[]>([]);
+ const [selected,setSelected]=useState<number|null>(null),[filter,setFilter]=useState('todos'),[channel,setChannel]=useState('todos'),[search,setSearch]=useState('');
+ const [lastSync,setLastSync]=useState<Date|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[newOpen,setNewOpen]=useState(false),[newForm,setNewForm]=useState(defaultNew);
+ const [analysis,setAnalysis]=useState<ConsultaIA|null>(null),[version,setVersion]=useState(0),[reportOpen,setReportOpen]=useState(false),[answerOpen,setAnswerOpen]=useState(false);
+ const [draft,setDraft]=useState(''),[draftSaved,setDraftSaved]=useState(''),[sendChannel,setSendChannel]=useState('WhatsApp');
+ const [ficha,setFicha]=useState<FichaConsulta|null>(null),[form,setForm]=useState<Form>(emptyForm),[formDirty,setFormDirty]=useState(false);
+ const [contactId,setContactId]=useState(''),[message,setMessage]=useState('');
+ const [user,setUser]=useState<UsuarioSesion|null>(null);
+ const deepLinkHandled=useRef(false);
+ const selectedMessage=items.find(x=>x.id===selected)??null;
+ const readOnly=user?.role==='gerencia';
+ useEffect(()=>{
+  if(deepLinkHandled.current || !items.length)return;
+  const id=Number(new URLSearchParams(window.location.search).get('consulta'));
+  if(!id||!items.some(m=>m.id===id))return;
+  deepLinkHandled.current=true;
+  setSelected(id);
+  const m=items.find(x=>x.id===id);
+  if(m&&!m.leido_en)void api<ConsultaBandeja>(`/api/inbox/${id}/read`,{method:'POST',body:JSON.stringify({read:true})})
+    .then(r=>setItems(old=>old.map(x=>x.id===id?r:x))).catch(()=>{});
+ },[items]);
+ const load=useCallback(async()=>{try{const [messages,files,opp]=await Promise.all([
+  api<ConsultaBandeja[]>('/api/inbox'),api<FichaConsulta[]>('/api/fichas'),api<Oportunidad[]>('/api/opportunities')]);
+  setItems(messages);setFichas(files);setContacts(opp);setLastSync(new Date());setError('');
+ }catch(e){setError(e instanceof Error?e.message:'No se pudo sincronizar la bandeja')}},[]);
+ useEffect(()=>{void load();void fetch('/api/session/me').then(r=>r.ok?r.json():null).then(u=>setUser(u)).catch(()=>{});
+  const timer=window.setInterval(()=>{if(document.visibilityState==='visible')void load()},30000);
+  const focus=()=>{if(document.visibilityState==='visible')void load()};document.addEventListener('visibilitychange',focus);
+  return()=>{window.clearInterval(timer);document.removeEventListener('visibilitychange',focus)};
+ },[load]);
+ useEffect(()=>{if(!selected)return;let alive=true;
+  Promise.all([api<{analisis:{version:number;resultado:ConsultaIA;borrador:string}|null}>(`/api/inbox/${selected}/analysis`),
+   selectedMessage?.ficha_id?api<FichaConsulta>(`/api/fichas/${selectedMessage.ficha_id}`):Promise.resolve(null)])
+   .then(([a,f])=>{if(!alive)return;setAnalysis(a.analisis?.resultado||null);setVersion(a.analisis?.version||0);
+    setDraft(a.analisis?.borrador||'');setDraftSaved(a.analisis?.borrador||'');setFicha(f);
+    const current=items.find(x=>x.id===selected);if(current){setForm(toForm(f,a.analisis?.resultado||null,current));setContactId(f?.oportunidad_id?String(f.oportunidad_id):'');}setFormDirty(false)})
+   .catch(e=>{if(alive)setError(e instanceof Error?e.message:'Error al cargar detalle')});return()=>{alive=false};
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[selected]);
+ const shown=useMemo(()=>items.filter(m=>{
+  const term=search.toLowerCase();return (channel==='todos'||(channel==='WhatsApp'&&!isEmail(m.canal)&&m.canal.toLowerCase().includes('whatsapp'))||(channel==='Correo'&&isEmail(m.canal)))&&
+   (filter==='todos'||(filter==='sin_leer'&&!m.leido_en)||(filter==='nueva'&&m.leido_en&&m.estado==='nueva')||(filter==='en_gestion'&&m.estado==='en_gestion')||(filter==='resuelta'&&m.estado==='resuelta'))&&
+   [m.cliente,m.contacto,m.texto,m.asunto,m.email_remitente].some(v=>v.toLowerCase().includes(term));
+ }),[items,channel,filter,search]);
+ async function open(m:ConsultaBandeja){if(selected===m.id){close();return;}setSelected(m.id);setMessage('');setAnalysis(null);setReportOpen(false);setAnswerOpen(false);setFormDirty(false);setSendChannel(isEmail(m.canal)?'Correo':'WhatsApp');
+  if(!m.leido_en)try{const saved=await api<ConsultaBandeja>(`/api/inbox/${m.id}/read`,{method:'POST',body:JSON.stringify({read:true})});setItems(v=>v.map(x=>x.id===m.id?saved:x));}catch{}
  }
- const fetchAll=useCallback(async()=>{setLoading(true);setError('');try{const rows=await api<ConsultaBandeja[]>('/api/inbox');setConsultas(rows);setSeleccion(old=>old&&rows.some(r=>r.id===old)?old:null);}catch(e){setError(e instanceof Error?e.message:'Error cargando consultas');}finally{setLoading(false)}},[]);
- useEffect(()=>{void fetchAll()},[fetchAll]);
- const counts=useMemo(()=>({todas:consultas.length,nueva:consultas.filter(c=>c.estado==='nueva').length,en_gestion:consultas.filter(c=>c.estado==='en_gestion').length,resuelta:consultas.filter(c=>c.estado==='resuelta').length}),[consultas]);
- const visible=useMemo(()=>consultas.filter(c=>(filtro==='todas'||c.estado===filtro)&&[c.cliente,c.contacto,c.texto].some(x=>x.toLocaleLowerCase('es').includes(texto.toLocaleLowerCase('es')))),[consultas,filtro,texto]);
- const actual=consultas.find(c=>c.id===seleccion);
- useEffect(()=>{
-  if(loading||usedUrlRef.current)return;
-  usedUrlRef.current=true;
-  const queryId=Number(new URLSearchParams(window.location.search).get('consulta'));
-  if(queryId>0&&consultas.some(c=>c.id===queryId))setSeleccion(queryId);
- },[loading,consultas]);
- useEffect(()=>{
-  const open=(event:Event)=>{const id=(event as CustomEvent<number>).detail;if(consultas.some(c=>c.id===id))setSeleccion(id)};
-  window.addEventListener('impulso:open-consulta',open);
-  return()=>window.removeEventListener('impulso:open-consulta',open);
- },[consultas]);
- useEffect(()=>{
-  if(!seleccion){setResult(null);setDraft('');setSavedDraft('');setAnalysisVersion(0);return}
-  let active=true;
-  void api<{analisis:{version:number;resultado:ConsultaIA;borrador:string}|null}>(`/api/inbox/${seleccion}/analysis`)
-   .then(d=>{if(!active)return;setResult(d.analisis?.resultado??null);setDraft(d.analisis?.borrador??'');setSavedDraft(d.analisis?.borrador??'');setAnalysisVersion(d.analisis?.version??0)})
-   .catch(()=>{if(active){setResult(null);setDraft('');setSavedDraft('')}});
-  return()=>{active=false};
- },[seleccion]);
-
- useEffect(()=>{
-  const linkedId=actual?.oportunidad_id;
-  setLinkedDetail(null);
-  if(!linkedId)return;
-  let live=true;
-  void api<Detalle>(`/api/opportunities/${linkedId}`).then(d=>{if(live)setLinkedDetail(d)}).catch(()=>{});
-  return()=>{live=false};
- },[actual?.oportunidad_id]);
- useEffect(()=>{if(seleccion!==null&&!visible.some(c=>c.id===seleccion)){setSeleccion(null);setResult(null);setDraft('');}},[seleccion,visible]);
- // En escritorio mostramos el primer mensaje pendiente; en celular se conserva la vista de lista.
- useEffect(()=>{
-  if (loading || seleccion!==null || !visible.length || typeof window==='undefined') return;
-  if (window.matchMedia('(min-width: 801px)').matches) {
-   setSeleccion(visible.find(c=>c.estado==='nueva')?.id ?? visible[0].id);
-  }
- },[loading,seleccion,visible]);
- function choose(id:number){setSeleccion(id);setError('');setResult(null);setCreated(null);setDraft('');setSavedDraft('');setAnalysisVersion(0);setCreateOpen(false);setShowContactData(false);}
- async function changeStatus(estado:ConsultaBandeja['estado']){if(!actual)return;setBusy(true);setError('');try{const updated=await api<ConsultaBandeja>(`/api/inbox/${actual.id}/status`,{method:'POST',body:JSON.stringify({estado})});setConsultas(cs=>cs.map(c=>c.id===updated.id?updated:c));if(estado==='resuelta')setCreateOpen(false);setShowContactData(false);}catch(e){setError(e instanceof Error?e.message:'No se pudo actualizar el estado');}finally{setBusy(false)}}
- async function analyze(regenerar=false){if(!actual)return;setBusy(true);setError('');try{
-  const stored=await api<{version:number;resultado:ConsultaIA;borrador:string}>(`/api/inbox/${actual.id}/analysis`,{method:'POST',body:JSON.stringify({regenerar})});
-  setResult(stored.resultado);setDraft(stored.borrador);setSavedDraft(stored.borrador);setAnalysisVersion(stored.version);
- }catch(e){setError(e instanceof Error?e.message:'No se pudo preparar la respuesta')}finally{setBusy(false)}}
- async function persistDraft(){if(!actual||!result||draft===savedDraft)return;setSavingDraft(true);setError('');try{
-  const stored=await api<{borrador:string}>(`/api/inbox/${actual.id}/draft`,{method:'POST',body:JSON.stringify({borrador:draft})});setSavedDraft(stored.borrador);
- }catch(e){setError(e instanceof Error?e.message:'No se pudo guardar la respuesta')}finally{setSavingDraft(false)}}
- async function addNew(e:React.FormEvent){e.preventDefault();setNewBusy(true);setError('');try{
-  const saved=await api<ConsultaBandeja>('/api/inbox',{method:'POST',body:JSON.stringify(newForm)});
-  setNewOpen(false);setNewForm({cliente:'',contacto:'',texto:'',canal:'Manual'});setFiltro('todas');setTexto('');await fetchAll();setSeleccion(saved.id);
- }catch(e){setError(e instanceof Error?e.message:'No se pudo registrar la consulta')}finally{setNewBusy(false)}}
- async function create(e:React.FormEvent){e.preventDefault();if(!actual)return;setBusy(true);setError('');try{const saved=await api<Detalle>('/api/opportunities',{method:'POST',body:JSON.stringify({cliente:contactForm.cliente.trim(),contacto:contactForm.contacto.trim(),producto:contactForm.producto.trim(),cantidad:contactForm.cantidad?Number(contactForm.cantidad):null,monto_estimado_usd:null,tipo_consulta:contactForm.tipo_consulta,canal_origen:actual.canal.startsWith("WhatsApp")?"WhatsApp":canalesOrigen.includes(actual.canal as CanalOrigen)?actual.canal:"Manual",presentacion:contactForm.presentacion,packaging:contactForm.packaging,notas:`Consulta original (${actual.canal}): ${actual.texto}${result?`\nRequisitos: ${result.requisitos.join('; ')}\nDatos pendientes: ${result.datos_faltantes.join('; ')}`:''}`})});setCreated(saved);setLinkedDetail(saved);setCreateOpen(false);setShowContactData(true);const linked=await api<ConsultaBandeja>(`/api/inbox/${actual.id}/link-opportunity`,{method:'POST',body:JSON.stringify({opportunity_id:saved.id})});setConsultas(cs=>cs.map(c=>c.id===linked.id?linked:c));}catch(e){setError(e instanceof Error?e.message:'No se pudo registrar el contacto comercial');}finally{setBusy(false)}}
- async function copy(){try{await navigator.clipboard.writeText(draft);setCopyText('Copiado')}catch{setCopyText('Seleccioná el texto y copialo')}}
- return <Shell><div className="bo-head"><div><div className="bo-breadcrumb">GESTIÓN COMERCIAL / CONSULTAS</div><h1>Bandeja de consultas</h1></div><div className="bo-head-actions"><button className="btn btn-outline" onClick={()=>setNewOpen(v=>!v)}>Nueva consulta</button><button className="btn btn-outline" onClick={()=>void fetchAll()}><RefreshCcw size={16}/> Actualizar</button></div></div>
- 
- 
- {newOpen&&<form className="panel new-consultation-form" onSubmit={e=>void addNew(e)}><h2>Nueva consulta</h2><p className="form-hint">Carga manual de un mensaje recibido por WhatsApp, correo, formulario u otro medio. No se sincroniza automáticamente.</p><div className="bo-data-grid"><label>Cliente<input required minLength={2} maxLength={120} value={newForm.cliente} onChange={e=>setNewForm({...newForm,cliente:e.target.value})}/></label><label>Persona de contacto<input required minLength={2} maxLength={120} value={newForm.contacto} onChange={e=>setNewForm({...newForm,contacto:e.target.value})}/></label></div><label>Canal de origen<select value={newForm.canal} onChange={e=>setNewForm({...newForm,canal:e.target.value as CanalOrigen})}>{canalesOrigen.map(c=><option key={c} value={c}>{c}</option>)}</select></label><label>Mensaje<textarea required minLength={5} maxLength={5000} rows={4} value={newForm.texto} onChange={e=>setNewForm({...newForm,texto:e.target.value})}/></label><div className="new-consultation-actions"><button type="submit" disabled={newBusy} className="btn btn-primary">{newBusy?'Guardando...':'Guardar consulta'}</button><button type="button" className="btn btn-outline" onClick={()=>setNewOpen(false)}>Cancelar</button></div></form>}
+ function close(){if(formDirty&&!window.confirm('Tenés cambios sin guardar en el informe. ¿Cerrar de todos modos?'))return;setSelected(null);setReportOpen(false);setAnswerOpen(false);setMessage('');setFormDirty(false);}
+ useEffect(()=>{if(!selected)return;const listener=(e:KeyboardEvent)=>{if(e.key==='Escape')close()};window.addEventListener('keydown',listener);return()=>window.removeEventListener('keydown',listener)});
+ async function changeStatus(estado:ConsultaBandeja['estado']){if(!selectedMessage)return;setBusy(true);try{const value=await api<ConsultaBandeja>(`/api/inbox/${selectedMessage.id}/status`,{method:'POST',body:JSON.stringify({estado})});setItems(v=>v.map(x=>x.id===value.id?value:x))}catch(e){setError(String(e))}finally{setBusy(false)}}
+ async function markUnread(){if(!selectedMessage)return;setBusy(true);try{const v=await api<ConsultaBandeja>(`/api/inbox/${selectedMessage.id}/read`,{method:'POST',body:JSON.stringify({read:false})});setItems(old=>old.map(m=>m.id===v.id?v:m));setSelected(null)}catch(e){setError(String(e))}finally{setBusy(false)}}
+ async function generate(target:'report'|'answer',regenerate=false){if(!selectedMessage)return;setBusy(true);setError('');try{const a=await api<{version:number;resultado:ConsultaIA;borrador:string}>(`/api/inbox/${selectedMessage.id}/analysis`,{method:'POST',body:JSON.stringify({regenerar:regenerate})});setAnalysis(a.resultado);setVersion(a.version);setDraft(a.borrador);setDraftSaved(a.borrador);
+  if(target==='report'){setReportOpen(true);setForm(old=>formDirty?old:toForm(ficha,a.resultado,selectedMessage))}else setAnswerOpen(true);
+ }catch(e){setError(e instanceof Error?e.message:'No se pudo generar')}finally{setBusy(false)}}
+ async function saveReport(){if(!ficha)return;setBusy(true);try{const v=await api<FichaConsulta>(`/api/fichas/${ficha.id}/edit`,{method:'POST',body:JSON.stringify(payloadFor(form))});setFicha(v);setFichas(old=>old.map(f=>f.id===v.id?v:f));setFormDirty(false);setMessage('Información de la consulta guardada.')}catch(e){setError(String(e))}finally{setBusy(false)}}
+ async function saveDraft(){if(!selectedMessage||draft===draftSaved)return;setBusy(true);try{const a=await api<{borrador:string}>(`/api/inbox/${selectedMessage.id}/draft`,{method:'POST',body:JSON.stringify({borrador:draft})});setDraftSaved(a.borrador);setMessage('Borrador guardado.')}catch(e){setError(String(e))}finally{setBusy(false)}}
+ async function saveContact(){if(!ficha||!form.cliente.trim())return;setBusy(true);setMessage('');try{
+  const v=await api<{opportunity_id:number;codigo:string}>(`/api/fichas/${ficha.id}/save-contact`,{method:'POST',body:JSON.stringify({...payloadFor(form),contacto_email:form.contacto_email,contacto_telefono:form.contacto_telefono,opportunity_id:contactId?Number(contactId):null})});
+  setContactId(String(v.opportunity_id));setFormDirty(false);setMessage(`Ficha ${v.codigo} vinculada al contacto comercial.`);await load();
+  const f=await api<FichaConsulta>(`/api/fichas/${ficha.id}`);setFicha(f);
+ }catch(e){setError(e instanceof Error?e.message:'No se pudo guardar el contacto')}finally{setBusy(false)}}
+ async function moveMessage(destination:string){if(!selectedMessage)return;setBusy(true);try{await api(`/api/inbox/${selectedMessage.id}/move`,{method:'POST',body:JSON.stringify({ficha_id:destination?Number(destination):null})});await load();setSelected(null);setMessage('Mensaje movido a su ficha.')}catch(e){setError(String(e))}finally{setBusy(false)}}
+ async function createNew(e:React.FormEvent){e.preventDefault();setBusy(true);setError('');try{await api('/api/inbox/new',{method:'POST',body:JSON.stringify(newForm)});setNewOpen(false);setNewForm(defaultNew);await load();}catch(e){setError(e instanceof Error?e.message:'No se pudo guardar')}finally{setBusy(false)}}
+ function edit<K extends keyof Form>(key:K,value:Form[K]){setForm(old=>({...old,[key]:value}));setFormDirty(true)}
+ const code=fichas.find(f=>f.id===selectedMessage?.ficha_id)?.codigo||ficha?.codigo||'Sin ficha';
+ return <Shell><div className="v2-page-head"><div><div className="eyebrow">GESTIÓN COMERCIAL / CONSULTAS</div><h1>Bandeja de consultas</h1></div><div className="v2-head-right"><span className="v2-sync" title="Sincronización automática cada 30 segundos">{lastSync?'Sincronizado automáticamente':'Sincronizando...'}</span>{!readOnly&&<button className="btn btn-primary" onClick={()=>setNewOpen(true)}><Plus size={17}/> Nueva consulta</button>}</div></div>
  {error&&<div className="alert error" role="alert">{error}<button onClick={()=>setError('')}>Cerrar</button></div>}
- <div className={`bo-layout ${seleccion?'bo-selected':''}`}><section className="bo-list panel" aria-label="Lista de consultas"><div className="bo-list-header"><strong>Mensajes recibidos</strong><span>{visible.length} resultados</span></div><label className="bo-search"><Search size={17}/><input value={texto} onChange={e=>setTexto(e.target.value)} placeholder="Buscar por cliente, contacto o texto" aria-label="Buscar consulta"/></label><div className="bo-filters" role="group" aria-label="Filtrar consultas">{(['todas','nueva','en_gestion','resuelta'] as EstadoFiltro[]).map(f=><button key={f} onClick={()=>setFiltro(f)} className={`bo-filter-tab bo-filter-${f} ${filtro===f?'selected':''}`}>{f==='todas'?'Todas':nombreEstado[f]} <span>{counts[f]}</span></button>)}<label className="bo-filter-select"><span className="sr-only">Filtrar consultas por estado</span><select aria-label="Estado de la consulta" value={filtro} onChange={e=>setFiltro(e.target.value as EstadoFiltro)}><option value="todas">Todas ({counts.todas})</option><option value="nueva">Sin atender ({counts.nueva})</option><option value="en_gestion">En gestión ({counts.en_gestion})</option><option value="resuelta">Resueltas ({counts.resuelta})</option></select></label></div>
- <div className="bo-rows">{visible.map(c=><button key={c.id} className={`bo-row ${seleccion===c.id?'is-selected':''}`} onClick={()=>choose(c.id)}><span className="bo-row-avatar">{c.cliente.charAt(0)}</span><span className="bo-row-main"><span className="bo-row-top"><strong>{c.cliente}</strong><small>{fechaHora(c.recibido_el)}</small></span><span className="bo-row-person">{c.contacto} · {c.canal.startsWith('WhatsApp')?'WhatsApp':c.canal}</span><span className="bo-row-preview">{c.texto}</span><span className={`bo-state bo-state-${c.estado}`}>{nombreEstado[c.estado]}</span></span></button>)}{!visible.length&&<p className="bo-empty">{loading?'Cargando consultas...':'No hay consultas con estos filtros.'}</p>}</div></section>
- <section className="bo-detail panel" aria-label="Detalle de consulta">{actual?<><div className="bo-detail-head"><button className="bo-back" onClick={()=>setSeleccion(null)}><ArrowLeft size={18}/> Volver a la bandeja</button><div className="bo-person"><span className="bo-row-avatar large">{actual.cliente.charAt(0)}</span><div><h2>{actual.cliente}</h2><p>{actual.contacto} · {actual.canal.startsWith('WhatsApp')?'WhatsApp':actual.canal}</p></div></div><span className={`bo-state bo-state-${actual.estado}`}>{nombreEstado[actual.estado]}</span></div><div className="bo-conversation"><p className="bo-time">Mensaje recibido · {fechaHora(actual.recibido_el)}</p><div className="bo-bubble">{actual.texto}</div></div>
- <div className="bo-work">
-  <section className="bo-operation-section" aria-label="Estado de la consulta">
-   <div className="bo-operation-header"><h3>Estado</h3></div>
-   <div className="bo-status-line"><label htmlFor="consultation-status" className="sr-only">Estado de la consulta</label><select id="consultation-status" value={actual.estado} disabled={busy} onChange={e=>void changeStatus(e.target.value as ConsultaBandeja['estado'])}><option value="nueva">Sin atender</option><option value="en_gestion">En gestión</option><option value="resuelta">Resuelta</option></select></div>
-  </section>
-  <section className="bo-operation-section" aria-label="Preparar respuesta">
-   <div className="bo-operation-header"><h3>Respuesta</h3></div>
-   {!result&&<button className="btn btn-primary" disabled={busy} onClick={()=>void analyze(false)}>{busy?<LoaderCircle size={16}/>:<ClipboardList size={16}/>} {busy?'Procesando...':'Preparar respuesta'}</button>}{result&&<button type="button" className="btn btn-outline" disabled={busy||draft!==savedDraft} title={draft!==savedDraft?'Guardá primero los cambios del borrador':'Generar una nueva versión'} onClick={()=>void analyze(true)}>Volver a generar</button>}
-  </section>
-  <section className="bo-operation-section" aria-label="Contacto comercial">
-   <div className="bo-operation-header"><h3>Contacto comercial</h3></div>
-   {actual.oportunidad_id || created ? <>
-      <Link className="btn btn-outline" href={`/oportunidades/${created?.id||actual.oportunidad_id}`}>Datos de contacto <ArrowRight size={15}/></Link>
-      {linkedDetail&&<p className="bo-hint">{linkedDetail.cliente} · {linkedDetail.producto}{linkedDetail.cantidad?` · ${linkedDetail.cantidad.toLocaleString('es-AR')} unidades`:''}</p>}
-    </> : actual.estado==='resuelta' ? <>
-      <button className="btn btn-outline" type="button" onClick={()=>setShowContactData(v=>!v)}>Datos de contacto</button>
-      {showContactData&&<div className="bo-contact-summary"><div><small>Cliente</small><strong>{result?.cliente||actual.cliente}</strong></div><div><small>Persona de contacto</small><strong>{result?.contacto||actual.contacto}</strong></div><div><small>Producto</small><strong>{result?.producto||extractFromMessage(actual.texto).producto||'No informado'}</strong></div><div><small>Cantidad</small><strong>{result?.cantidad!=null?result.cantidad.toLocaleString('es-AR'):(extractFromMessage(actual.texto).cantidad||'No informada')}</strong></div><p>Esta consulta no tiene un contacto comercial registrado.</p></div>}
-    </> : <button className="btn btn-outline" type="button" disabled={busy} onClick={beginContact}>Registrar contacto comercial <ArrowRight size={15}/></button>}
-  </section>
- {createOpen&&<form className="bo-contact-form" onSubmit={e=>void create(e)}><div className="bo-form-title"><strong>Nuevo contacto comercial</strong><button type="button" className="btn btn-quiet" onClick={()=>setCreateOpen(false)}>Cancelar</button></div><div className="bo-data-grid"><label>Cliente<input required minLength={2} maxLength={120} value={contactForm.cliente} onChange={e=>setContactForm({...contactForm,cliente:e.target.value})}/></label><label>Persona de contacto<input required minLength={2} maxLength={120} value={contactForm.contacto} onChange={e=>setContactForm({...contactForm,contacto:e.target.value})}/></label><label>Producto o servicio<input required minLength={2} maxLength={150} placeholder="Producto de interés" value={contactForm.producto} onChange={e=>setContactForm({...contactForm,producto:e.target.value})}/></label><label>Cantidad (opcional)<input type="number" min="1" value={contactForm.cantidad} onChange={e=>setContactForm({...contactForm,cantidad:e.target.value})}/></label></div><div className="bo-data-grid"><label>Tipo de consulta<select value={contactForm.tipo_consulta} onChange={e=>setContactForm({...contactForm,tipo_consulta:e.target.value as TipoConsulta})}>{tiposConsulta.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label><label>Presentación<input maxLength={120} placeholder="Ej. 250 ml" value={contactForm.presentacion} onChange={e=>setContactForm({...contactForm,presentacion:e.target.value})}/></label><label>Packaging<input maxLength={200} placeholder="Ej. Envase personalizado" value={contactForm.packaging} onChange={e=>setContactForm({...contactForm,packaging:e.target.value})}/></label></div><button className="btn btn-primary" type="submit" disabled={busy||!contactForm.cliente.trim()||!contactForm.contacto.trim()||!contactForm.producto.trim()}>{busy?'Guardando...':'Guardar contacto comercial'}</button></form>}
- {result&&<div className="bo-ai-result"><h3><ClipboardList size={17}/> Información de la consulta</h3><p className="bo-saved-indicator">Análisis guardado · Versión {analysisVersion}</p><div className="bo-data-grid"><div><small>Cliente</small><strong>{result.cliente||actual.cliente}</strong></div><div><small>Contacto</small><strong>{result.contacto||actual.contacto}</strong></div><div><small>Producto</small><strong>{result.producto||'No indicado'}</strong></div><div><small>Cantidad</small><strong>{result.cantidad?.toLocaleString('es-AR')??'No indicada'}</strong></div><div><small>Tipo de consulta</small><strong>{tipoConsultaNombre[result.tipo_consulta||'sin_clasificar']}</strong></div><div><small>Presentación</small><strong>{result.presentacion||'No indicada'}</strong></div><div><small>Desarrollo de fórmula</small><strong>{result.necesita_formula==='si'?'Solicitado':result.necesita_formula==='no'?'No solicitado':'A confirmar'}</strong></div><div><small>Packaging</small><strong>{result.necesita_packaging==='si'?'Solicitado':result.necesita_packaging==='no'?'No solicitado':'A confirmar'}</strong></div></div>
- {result.datos_faltantes.length>0&&<div className="bo-missing"><strong>Datos que faltan confirmar</strong><ul>{result.datos_faltantes.map((d,i)=><li key={i}>{d}</li>)}</ul></div>}
- <div className="bo-draft"><label htmlFor="borrador">Respuesta sugerida (editable)</label><textarea id="borrador" rows={5} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={()=>void persistDraft()} /><div className="bo-draft-bottom"><button type="button" className="btn btn-outline" onClick={()=>void persistDraft()} disabled={savingDraft||draft===savedDraft}>{savingDraft?'Guardando...':draft===savedDraft?'Respuesta guardada':'Guardar respuesta'}</button><button className="btn btn-outline" onClick={()=>void copy()} disabled={!draft}>{copyText}</button><small>El mensaje no se envía automáticamente.</small></div></div></div>}
- </div></>:<div className="bo-empty-detail"><Inbox size={28}/><strong>Seleccioná una consulta</strong><span>Elegí un mensaje para ver su detalle.</span></div>}</section></div></Shell>
+ <section className="panel v2-inbox" aria-label="Lista de mensajes recibidos"><div className="v2-inbox-toolbar"><label className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por cliente, asunto, emisor o mensaje"/></label><select value={channel} onChange={e=>setChannel(e.target.value)} aria-label="Filtrar por canal"><option value="todos">Todos los canales</option><option value="WhatsApp">WhatsApp</option><option value="Correo">Email</option></select><select value={filter} onChange={e=>setFilter(e.target.value)} aria-label="Filtrar por estado"><option value="todos">Todos los estados</option><option value="sin_leer">No leídos ({items.filter(m=>!m.leido_en).length})</option><option value="nueva">Sin atender</option><option value="en_gestion">En gestión</option><option value="resuelta">Resueltos</option></select></div>
+ <div className="v2-list-meta">{shown.length} mensajes · {items.filter(m=>!m.leido_en).length} sin leer</div>
+ <div className="v2-message-list">{shown.map(m=><button className={`v2-message-row ${!m.leido_en?'is-unread':''}`} key={m.id} onClick={()=>void open(m)}><span className="v2-row-icon">{isEmail(m.canal)?<Mail size={20} strokeWidth={1.6}/>:<MessageCircle size={20} strokeWidth={1.6}/>}</span><span className="v2-message-body"><span className="v2-message-top"><strong>{m.cliente}</strong><small>{dateAR(m.recibido_el)}</small></span><span className="v2-message-sender">{m.contacto} · {isEmail(m.canal)?'Email':m.canal}{m.asunto?` · ${m.asunto}`:''}</span><span className="v2-preview">{m.texto}</span></span><span className={`v2-state ${!m.leido_en?'unread':m.estado}`}>{stateText(m)}</span><ChevronRight size={18} strokeWidth={1.6}/></button>)}{shown.length===0&&<p className="empty muted">No hay mensajes con los filtros seleccionados.</p>}</div></section>
+ {newOpen&&<div className="modal-backdrop v2-overlay" onMouseDown={()=>setNewOpen(false)}><div className="modal v2-modal" role="dialog" aria-modal="true" aria-labelledby="new-inbox-title" onMouseDown={e=>e.stopPropagation()}><div className="modal-head"><h2 id="new-inbox-title">Nueva consulta</h2><button className="icon-button" aria-label="Cerrar" onClick={()=>setNewOpen(false)}><X/></button></div><form className="fields" onSubmit={e=>void createNew(e)}><div className="form-row"><label>Empresa<input required value={newForm.cliente} onChange={e=>setNewForm({...newForm,cliente:e.target.value})}/></label><label>Emisor / persona de contacto<input required value={newForm.contacto} onChange={e=>setNewForm({...newForm,contacto:e.target.value})}/></label></div><label>Canal<select value={newForm.canal} onChange={e=>setNewForm({...newForm,canal:e.target.value})}><option>WhatsApp</option><option value="Correo">Email</option><option>Formulario web</option><option>Manual</option></select></label><div className="form-row"><label>Correo del emisor<input type="email" value={newForm.email_remitente} onChange={e=>setNewForm({...newForm,email_remitente:e.target.value})} placeholder="contacto@empresa.com"/></label><label>Teléfono del emisor<input value={newForm.telefono_remitente} onChange={e=>setNewForm({...newForm,telefono_remitente:e.target.value})} placeholder="Ej. +54 11 5555-5555"/></label></div>{newForm.canal==='Correo'&&<label>Asunto<input value={newForm.asunto} onChange={e=>setNewForm({...newForm,asunto:e.target.value})}/></label>}<label>Mensaje recibido<textarea rows={5} required minLength={5} value={newForm.texto} onChange={e=>setNewForm({...newForm,texto:e.target.value})}/></label><p className="muted">La recepción automática de WhatsApp y Email requiere una integración futura. Esta carga es manual.</p><button disabled={busy} className="btn btn-primary" type="submit">Guardar consulta</button></form></div></div>}
+ {selectedMessage&&<div className="modal-backdrop v2-overlay" onMouseDown={close}><div className="modal v2-modal v2-detail-modal" role="dialog" aria-modal="true" aria-label="Detalle de consulta" onMouseDown={e=>e.stopPropagation()}>
+  <header className="v2-detail-header"><div><small>{code} · {isEmail(selectedMessage.canal)?'Email':'WhatsApp'} · {dateAR(selectedMessage.recibido_el)}</small><h2>{selectedMessage.cliente}</h2><p>{selectedMessage.contacto}{selectedMessage.email_remitente?` · ${selectedMessage.email_remitente}`:''}{selectedMessage.asunto?` · ${selectedMessage.asunto}`:''}</p></div><button className="icon-button" onClick={close} aria-label="Cerrar detalle"><X/></button></header>
+  <div className="v2-detail-content"><div className="v2-original-message">{selectedMessage.texto}</div>
+   <div className="v2-message-controls"><label>Estado comercial <select value={selectedMessage.estado} disabled={busy||readOnly} onChange={e=>void changeStatus(e.target.value as ConsultaBandeja['estado'])}><option value="nueva">Sin atender</option><option value="en_gestion">En gestión</option><option value="resuelta">Resuelta</option></select></label>{!readOnly&&<button type="button" className="btn btn-outline" onClick={()=>void markUnread()}>Marcar como no leído</button>}</div>
+   {!readOnly&&<div className="v2-actions"><button className="btn btn-outline" disabled={busy} onClick={()=>{if(analysis){setReportOpen(v=>!v)}else void generate('report')}}><FileText size={17}/> {reportOpen?'Ocultar informe':'Generar informe'}</button><button className="btn btn-primary" disabled={busy} onClick={()=>{if(analysis){setAnswerOpen(v=>!v)}else void generate('answer')}}><MessageCircle size={17}/> {answerOpen?'Ocultar respuesta':'Generar respuesta'}</button></div>}
+   {readOnly&&<div className="v2-actions"><button className="btn btn-outline" disabled={!analysis} onClick={()=>setReportOpen(v=>!v)}><FileText size={17}/> {reportOpen?'Ocultar informe':'Ver informe guardado'}</button><button className="btn btn-outline" disabled={!analysis} onClick={()=>setAnswerOpen(v=>!v)}><MessageCircle size={17}/> {answerOpen?'Ocultar borrador':'Ver borrador guardado'}</button></div>}
+   {reportOpen&&<section className="v2-analysis-panel"><div className="v2-section-header"><h3><FileText size={18}/> Información de la consulta</h3><span className="muted">Versión IA {version} · Editable</span></div><div className="v2-form-grid"><label>Nombre de la ficha<input disabled={readOnly} value={form.titulo} onChange={e=>edit('titulo',e.target.value)}/></label><label>Empresa<input disabled={readOnly} value={form.cliente} onChange={e=>edit('cliente',e.target.value)}/></label><label>Contacto<input disabled={readOnly} value={form.contacto} onChange={e=>edit('contacto',e.target.value)}/></label><label>Producto / servicio<input disabled={readOnly} value={form.producto} onChange={e=>edit('producto',e.target.value)}/></label><label>Cantidad<input disabled={readOnly} type="number" min="1" value={form.cantidad} onChange={e=>edit('cantidad',e.target.value)}/></label><label>Presentación<input disabled={readOnly} value={form.presentacion} onChange={e=>edit('presentacion',e.target.value)}/></label><label>Tipo de consulta<select disabled={readOnly} value={form.tipo_consulta} onChange={e=>edit('tipo_consulta',e.target.value as TipoConsulta)}>{tiposConsulta.map(([v,name])=><option key={v} value={v}>{name}</option>)}</select></label><label>Packaging<input disabled={readOnly} value={form.packaging} onChange={e=>edit('packaging',e.target.value)}/></label></div><label className="v2-block-label">Resumen de la consulta<textarea disabled={readOnly} rows={3} value={form.resumen} onChange={e=>edit('resumen',e.target.value)}/></label><div className="v2-form-grid"><label>Requisitos (uno por línea)<textarea disabled={readOnly} rows={4} value={form.requisitos} onChange={e=>edit('requisitos',e.target.value)}/></label><label>Datos a confirmar (uno por línea)<textarea disabled={readOnly} rows={4} value={form.datos_faltantes} onChange={e=>edit('datos_faltantes',e.target.value)}/></label></div>
+   {!readOnly&&<><button className="btn btn-outline" disabled={busy||!formDirty} onClick={()=>void saveReport()}>{formDirty?'Guardar cambios del informe':'Información guardada'}</button><div className="v2-contact-actions"><h3>Contacto comercial · {code}</h3><p className="muted">Los mensajes quedan asociados a esta consulta numerada. Seleccioná una ficha comercial existente o creá una nueva.</p><div className="v2-form-grid"><label>Email del contacto<input value={form.contacto_email} onChange={e=>edit('contacto_email',e.target.value)}/></label><label>Teléfono<input value={form.contacto_telefono} onChange={e=>edit('contacto_telefono',e.target.value)}/></label></div><label>Vincular con contacto existente (opcional)<select value={contactId} onChange={e=>setContactId(e.target.value)}><option value="">Nuevo contacto o coincidencia exacta de emisor</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.cliente} · {c.contacto} · ID {c.id}</option>)}</select></label><button className="btn btn-primary" onClick={()=>void saveContact()} disabled={busy}>{ficha?.oportunidad_id?'Actualizar ficha comercial':'Guardar contacto comercial'}</button></div></>}
+   </section>}
+   {answerOpen&&<section className="v2-analysis-panel"><div className="v2-section-header"><h3><MessageCircle size={18}/> Respuesta sugerida</h3><small title="La respuesta actual está guardada. Si modificás el texto, podés guardar los cambios.">{draft===draftSaved?'✓ Borrador guardado':'Cambios sin guardar'}</small></div><textarea rows={6} disabled={readOnly} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={()=>{if(draft!==draftSaved&&!readOnly)void saveDraft()}}/><div className="v2-action-row">{!readOnly&&<button className="btn btn-outline" disabled={busy||draft===draftSaved} onClick={()=>void saveDraft()}>Guardar cambios</button>}<button className="btn btn-outline" onClick={()=>void navigator.clipboard.writeText(draft)} disabled={!draft}><ClipboardCopy size={16}/> Copiar respuesta</button>{!readOnly&&<button className="btn btn-outline" disabled={busy||draft!==draftSaved} onClick={()=>void generate('answer',true)}><RotateCcw size={16}/> Regenerar</button>}</div><div className="v2-send-pending"><label>Canal de envío<select value={sendChannel} onChange={e=>setSendChannel(e.target.value)}><option value="WhatsApp">WhatsApp</option><option value="Correo">Email</option></select></label><button className="btn btn-primary" type="button" disabled><Send size={16}/> Enviar</button><small>Integración de envío por {sendChannel==='Correo'?'correo electrónico':'WhatsApp'} pendiente. Podés copiar el borrador y enviarlo manualmente.</small></div></section>}
+   <section className="v2-attachment"><h3>Organización de mensajes</h3><p className="muted">Podés mover este mensaje a otra consulta numerada o crear una nueva consulta.</p><select aria-label="Mover a ficha" defaultValue={String(selectedMessage.ficha_id||'')} id="v2-move-to" disabled={readOnly||busy}><option value="">Nueva ficha numerada</option>{fichas.map(f=><option key={f.id} value={f.id}>{f.codigo} · {f.cliente} · {f.producto||f.titulo}</option>)}</select>{!readOnly&&<button className="btn btn-outline" disabled={busy} onClick={()=>{const el=document.getElementById('v2-move-to') as HTMLSelectElement|null;if(el)void moveMessage(el.value)}}>Mover mensaje</button>}</section>
+   {message&&<p className="v2-success" role="status"><Check size={16}/>{message}</p>}
+  </div>
+ </div></div>}
+ </Shell>;
 }

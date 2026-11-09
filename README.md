@@ -1,82 +1,88 @@
-# Impulso — Asistente comercial con IA
+# IMPULSO V2 — Mejoras para Pasmanter
 
-MVP de portfolio independiente, con datos ficticios. **No es software de una empresa real.**
+Esta entrega está preparada para **aplicar sobre la versión actual de tu repositorio `impulso-ai`**. No modifica por sí sola GitHub, Railway ni Vercel.
 
-## Qué resuelve
+## Cambios incluidos
 
-- Dashboard de oportunidades y alertas de seguimiento con reglas de negocio reproducibles.
-- Registro de oportunidades e interacciones con persistencia SQLite.
-- Interpretación de consultas con OpenAI (extracción estructurada + borrador de respuesta).
-- Borradores de correos de seguimiento con IA y revisión humana.
-- **Resumen gerencial:** prioridades por días sin contacto, sin inventar predicciones ni consumir IA.
+1. **Bandeja de consultas**: lista completa al ingresar, detalle en popup, marcas no leído/leído independientes del estado comercial, filtros WhatsApp/Email, sincronización cada 30 segundos y al regresar a la pestaña. El botón «Actualizar» se elimina de esta pantalla.
+2. **Popup de consulta**: informe de IA editable, incluidos los datos a confirmar; borrador editable con estado «Borrador guardado»; copiar respuesta y selector de canal con «Enviar» deshabilitado, porque todavía no hay integración de envío.
+3. **Consultas numeradas**: cada ficha recibe un código `CON-AAAA-00001`; mensajes de correo o WhatsApp se asocian automáticamente cuando coincide exactamente el email o teléfono guardado en la ficha. Si hay ambigüedad se mantienen separados hasta decidir manualmente. Se pueden mover mensajes a otra ficha o crear otra ficha desde el mensaje.
+4. **Ficha de contactos**: la pantalla ya no presenta el resumen de ventas. Se incluyen datos generales editables y la lista de consultas numeradas de cada contacto con su historial.
+5. **Finalizados**: las etiquetas visibles son **Concretada / No concretada**. Los valores internos anteriores (`ganada/perdida`) se conservan por compatibilidad histórica. Se permite reactivar el contacto.
+6. **Reportes**: resumen comercial arriba, filtros por período/canal/responsable, chat de IA para Gerencia/Administración y PDF sin gráficos. La IA recibe agregados de solo lectura, no SQL ejecutable.
+7. **Usuarios**: roles Ventas, Gerencia (solo lectura comercial) y Administrador; administración de cuentas con contraseñas seguras y activación/desactivación. La preferencia de tema se guarda por cuenta y se aplica en nuevos dispositivos.
+8. **Interfaz**: línea visual minimalista, íconos finos y acento verde grisáceo. Selector de tema arriba del nombre y rol del usuario, luego «Cerrar sesión», luego «Guía de usuario».
+9. **Guía**: `frontend/public/guia-de-uso.pdf` actualizado.
 
-Stack: Next.js 15 / React / TypeScript, FastAPI, Pydantic, SQLite y API de OpenAI.
+## Antes de reemplazar archivos
 
-## Desarrollo local en Windows
+- **Hacé un backup actualizado del volumen SQLite de Railway**. La migración es aditiva, pero conviene contar con un punto de recuperación.
+- Conservá los `.env` y credenciales que ya funcionan. No es necesario cambiarlos para estas funciones.
+- Esta entrega no contiene una base SQLite de producción, backups ni contraseñas.
+- El primer inicio del backend actualizado agrega columnas y genera fichas numeradas para los mensajes históricos. No debería borrar contactos ni conversaciones.
 
-Backend (`backend/`):
+## Instalación en Windows, paso a paso
 
-```powershell
-py -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-Copy-Item .env.example .env
-# Editar .env y agregar OPENAI_API_KEY real. NO compartas el archivo.
-.\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8001
-```
+1. Descargá **Impulso_V2_Solo_Cambios.zip** y extraé su contenido directamente sobre:
 
-Frontend (`frontend/`, otra terminal):
+   `C:\Users\yesica.cherubino\Downloads\impulso`
 
-```powershell
-npm install
-Copy-Item .env.example .env.local
-npm run typecheck
-npm run build
-npm audit
-npm run dev -- -p 3001
-```
+   Es importante fusionar las carpetas `backend` y `frontend` existentes, no crear un proyecto separado dentro de ellas.
 
-Abrir http://localhost:3001 y http://127.0.0.1:8001/docs.
+2. Desde PowerShell:
 
-Si ya tenés `.env`/`.env.local` no los reemplaces. Si FastAPI usa el puerto 8001, `NEXT_PUBLIC_API_BASE_URL` debe apuntar a `http://127.0.0.1:8001`. CORS acepta 3000/3001 solamente en desarrollo.
+   ```powershell
+   cd C:\Users\yesica.cherubino\Downloads\impulso\backend
+   python -m pip install -r requirements.txt
+   python -m pytest -q
 
-## Activar el código de acceso de la demo
+   cd ..\frontend
+   npm install
+   npm run typecheck
+   npm run build
+   ```
 
-En `backend/.env`:
+3. Abrí localmente la aplicación si querés comprobar los flujos manualmente. Verificá especialmente login, guardado de ficha, popup, migración, PDF y temas.
 
-```dotenv
-PUBLIC_DEMO=true
-DEMO_ACCESS_CODE=UN_VALOR_ALEATORIO_LARGO
-AI_DAILY_LIMIT=12
-```
+4. **Solo después** de comprobar todo y confirmar el backup:
 
-En `frontend/.env.local`:
+   ```powershell
+   cd C:\Users\yesica.cherubino\Downloads\impulso
+   git add backend/app backend/tests backend/requirements.txt frontend/src frontend/public/guia-de-uso.pdf
+   git diff --cached --check
+   git status --short
+   git diff --cached --stat
+   git commit -m "Impulso V2: fichas, perfiles y reportes comerciales"
+   git push origin main
+   ```
 
-```dotenv
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8001
-NEXT_PUBLIC_DEMO_REQUIRES_CODE=true
-```
+   Es importante usar el `git add` explícito para **incluir los archivos nuevos** `backend/app/business_v2.py`, `frontend/src/app/impulso-v2.css`, `frontend/src/app/administracion/page.tsx` y la prueba `test_v2_workflows.py`. En el despliegue anterior Vercel había fallado porque un archivo nuevo no se había incluido en Git.
 
-El código de acceso **solo va en el backend**. En el frontend se solicita al usuario la primera vez que hace una operación de escritura. Se mantiene durante la pestaña abierta (sessionStorage). En caso de código incorrecto se solicita nuevamente. Para pruebas locales sin código, dejá `PUBLIC_DEMO=false`, `DEMO_ACCESS_CODE=` y `NEXT_PUBLIC_DEMO_REQUIRES_CODE=false`.
+5. Confirmá `Active` en Railway y `Ready` en Vercel y probá desde una ventana de incógnito.
 
-El límite de IA se reserva en una transacción SQLite y persiste entre reinicios, **siempre que el archivo de SQLite esté en un disco persistente**. No supone protección frente a abusos distribuidos; incorporar autenticación real y rate limiting por usuario para un producto comercial.
+## Usuarios: detalle importante
 
-## Publicación: requisitos antes de compartir
+El usuario indicado por `ADMIN_USERNAME` en Railway recibirá el rol **Administrador**. Si actualmente ese usuario se llama `ventas`, el sistema lo reconocerá como Administrador: es deliberado para no perder el acceso que permite crear más cuentas. Entrá con ese usuario, abrí «Administración» y creá usuarios de perfil **Ventas** y **Gerencia** con contraseñas propias. No es necesario publicar claves aquí ni en GitHub.
 
-1. Revocar y regenerar claves vistas en capturas, no comprometer secretos en Git.
-2. Revisar `npm audit` y `npm run build`; actualizar versiones vulnerables sin usar `--force` a ciegas.
-3. Configurar variables de backend solo en el hosting de la API. **Nunca** usar `NEXT_PUBLIC_` para claves.
-4. Usar un volumen persistente para SQLite, o migrar a Postgres. Si el disco es efímero, se pierden datos y se reinicia el contador de llamadas.
-5. Configurar `CORS_ORIGINS=https://tu-app.vercel.app` en el backend. No usar `*` en una demo pública.
-6. En frontend configurar `NEXT_PUBLIC_API_BASE_URL` con la URL HTTPS pública de FastAPI. En backend usar `PUBLIC_DEMO=true` y `DEMO_ACCESS_CODE`.
-7. Limitar presupuesto en OpenAI y probar desde incógnito. No colocar contactos reales ni información confidencial en esta demo.
-8. El código compartido es una protección básica de portfolio, **no autenticación por usuarios ni control de permisos corporativos**.
+`ADMIN_PASSWORD` conserva el comportamiento anterior: cambiar esa variable **no cambia** una contraseña ya guardada en SQLite. Usá «Administración → Restablecer contraseña» para cuentas existentes.
 
-## Presentación sugerida (2 minutos)
+## Alcance real de la demo
 
-1. Abrir resumen gerencial para ver prioridades calculadas.
-2. Analizar una consulta comercial ficticia con IA.
-3. Revisar campos extraídos y crear una oportunidad.
-4. Abrir ficha, ver historial y generar un correo editable de seguimiento.
+- La entrada de WhatsApp y Email **sigue siendo manual**. El polling sincroniza mensajes **ya registrados en Impulso**, no descarga mensajes externos.
+- El envío por WhatsApp o Email está **pendiente** y por eso aparece deshabilitado.
+- Los reportes con IA requieren `OPENAI_API_KEY` correctamente configurada, el modelo habilitado y disponibilidad de la cuota `AI_DAILY_LIMIT`. Comparten esa cuota con otras operaciones de IA.
+- No se ejecuta SQL generado por la IA. Los datos para reportes se agregan mediante consultas definidas por el backend.
+- Las operaciones históricas sin `fecha_cierre` utilizan de forma aproximada su último contacto para los filtros temporales. Los cierres nuevos registran `fecha_cierre` explícitamente.
+- El sistema conserva los datos de prueba existentes. Antes de una entrega definitiva, se debe acordar cómo separar demo y datos reales.
 
-No se envían correos automáticamente, ni se inventan cotizaciones, precios o plazos.
+## Qué comprobamos antes de entregarte el ZIP
+
+- **40 pruebas del backend aprobadas**, incluidas migraciones, lectura de mensajes, vinculación y movimiento, permisos, preferencia de tema y PDF. Para ejecutar los tests en este entorno sin acceso a Internet se utilizó un sustituto local de la biblioteca `openai` (no se realizaron llamadas reales al modelo).
+- Migración del esquema anterior ensayada sin pérdida de contactos ni mensajes.
+- Los 18 archivos TypeScript/TSX del frontend fueron analizados sin errores de sintaxis.
+- **No se pudo ejecutar la compilación completa de Next.js aquí**, porque este entorno no tiene instaladas las dependencias de npm y no puede descargarlas. **Antes del push, ejecutá `npm run typecheck` y `npm run build` en tu computadora.**
+- La generación del PDF está probada; su flujo real de descarga desde el navegador también se debe comprobar localmente.
+
+## Si el build de frontend falla
+
+No hagas `git push`. Mandame la última parte de la salida de `npm run typecheck` o `npm run build` y corregimos el archivo que lo provoque. Si Vercel muestra `Module not found`, verificá que la ruta señalada aparezca en los archivos seleccionados por Git.

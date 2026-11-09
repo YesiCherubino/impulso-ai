@@ -46,6 +46,8 @@ class Oportunidad(BaseModel):
     id: int
     cliente: str
     contacto: str
+    email: str = ''
+    telefono: str = ''
     producto: str
     cantidad: int | None
     monto_estimado_usd: float | None

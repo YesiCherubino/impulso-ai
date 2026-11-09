@@ -61,6 +61,11 @@ def init_auth(db_path: Path):
             bloqueo_hasta TEXT
           );
         ''')
+        current_cols = {r[1] for r in con.execute('PRAGMA table_info(usuarios)')}
+        if 'rol' not in current_cols:
+            con.execute("ALTER TABLE usuarios ADD COLUMN rol TEXT NOT NULL DEFAULT 'ventas'")
+        if 'tema' not in current_cols:
+            con.execute("ALTER TABLE usuarios ADD COLUMN tema TEXT NOT NULL DEFAULT 'claro'")
         if os.getenv('AUTH_ENABLED', 'false').lower() != 'true':
             return
         username = os.getenv('ADMIN_USERNAME', '').strip().lower()
@@ -72,6 +77,7 @@ def init_auth(db_path: Path):
         if not exists:
             con.execute('INSERT INTO usuarios (usuario,nombre,password_hash,creado_en) VALUES (?,?,?,?)',
                         (username, name, password_hash(password), now().isoformat()))
+        con.execute("UPDATE usuarios SET rol='administrador' WHERE usuario=?", (username,))
         # IMPORTANTE: cambiar ADMIN_PASSWORD en Railway no cambia la contraseña de un usuario ya creado.
 
 
@@ -93,17 +99,18 @@ def authenticate(db_path: Path, username: str, password: str):
         created, expires = now(), now() + timedelta(hours=SESSION_HOURS)
         con.execute('DELETE FROM sesiones WHERE expira_en < ?', (created.isoformat(),))
         con.execute('INSERT INTO sesiones VALUES (?,?,?,?)', (token_hash(token), row[0], created.isoformat(), expires.isoformat()))
-        return {'token': token, 'user': {'id': row[0], 'username': row[1], 'name': row[2]}, 'expires_at': expires.isoformat()}
+        user = con.execute('SELECT rol,tema FROM usuarios WHERE id=?',(row[0],)).fetchone()
+        return {'token': token, 'user': {'id': row[0], 'username': row[1], 'name': row[2], 'role': user[0], 'theme': user[1]}, 'expires_at': expires.isoformat()}
 
 
 def get_user(db_path: Path, token: str):
     if not token:
         return None
     with sqlite3.connect(db_path) as con:
-        row = con.execute('''SELECT u.id, u.usuario, u.nombre, s.expira_en FROM sesiones s JOIN usuarios u ON s.usuario_id=u.id
+        row = con.execute('''SELECT u.id, u.usuario, u.nombre, s.expira_en, u.rol, u.tema FROM sesiones s JOIN usuarios u ON s.usuario_id=u.id
                           WHERE s.token_hash=? AND s.expira_en>? AND u.activo=1''',
                           (token_hash(token), now().isoformat())).fetchone()
-        return {'id': row[0], 'username': row[1], 'name': row[2], 'expires_at': row[3]} if row else None
+        return {'id': row[0], 'username': row[1], 'name': row[2], 'expires_at': row[3], 'role': row[4], 'theme': row[5]} if row else None
 
 
 def logout(db_path: Path, token: str):

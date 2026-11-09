@@ -29,12 +29,12 @@ export default function FinalizadosPage(){
  const ganados=closed.filter(x=>x.estado==='ganada').length;
  const perdidos=closed.length-ganados;
  return <Shell>
-  <div className="page-head simple-head"><h1>Contactos finalizados</h1><button type="button" className="btn btn-outline" onClick={()=>void load()}><RefreshCw size={16}/> Actualizar</button></div>
+  <div className="page-head simple-head"><h1>Finalizados</h1><button type="button" className="btn btn-outline" onClick={()=>void load()}><RefreshCw size={16}/> Actualizar</button></div>
   {error&&<div className="alert error" role="alert">{error}<button onClick={()=>void load()}>Reintentar</button></div>}
   <section className="panel table-panel compact-contact-table" aria-label="Listado de contactos finalizados">
    <div className="finalizados-toolbar">
     <div className="finalizados-tabs" role="group" aria-label="Filtrar contactos finalizados">
-     {([{key:'todos',label:'Todos',count:closed.length},{key:'ganada',label:'Ganados',count:ganados},{key:'perdida',label:'Perdidos',count:perdidos}] as const).map(tab=><button key={tab.key} type="button" className={`finalizados-tab ${filtro===tab.key?'is-selected':''}`} aria-pressed={filtro===tab.key} onClick={()=>setFiltro(tab.key)}>{tab.label} <span>{tab.count}</span></button>)}
+     {([{key:'todos',label:'Todos',count:closed.length},{key:'ganada',label:'Concretadas',count:ganados},{key:'perdida',label:'No concretadas',count:perdidos}] as const).map(tab=><button key={tab.key} type="button" className={`finalizados-tab ${filtro===tab.key?'is-selected':''}`} aria-pressed={filtro===tab.key} onClick={()=>setFiltro(tab.key)}>{tab.label} <span>{tab.count}</span></button>)}
     </div>
     <label className="search finalizados-search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar cliente, contacto o producto" aria-label="Buscar contactos finalizados"/></label>
    </div>

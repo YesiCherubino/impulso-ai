@@ -134,6 +134,53 @@ def init_db(db_path: Path) -> None:
         for column, definition in additions.items():
             if column not in columns:
                 con.execute(f'ALTER TABLE oportunidades ADD COLUMN {column} {definition}')
+        # V2: migraciones aditivas. Los mensajes y contactos históricos no se eliminan.
+        inbox_columns = {r['name'] for r in con.execute('PRAGMA table_info(bandeja_consultas)')}
+        inbox_additions = {
+            'leido_en': 'TEXT', 'email_remitente': "TEXT NOT NULL DEFAULT ''",
+            'telefono_remitente': "TEXT NOT NULL DEFAULT ''", 'asunto': "TEXT NOT NULL DEFAULT ''",
+            'ficha_id': 'INTEGER REFERENCES fichas_consulta(id)',
+        }
+        for column, definition in inbox_additions.items():
+            if column not in inbox_columns:
+                con.execute(f'ALTER TABLE bandeja_consultas ADD COLUMN {column} {definition}')
+        for column, definition in {
+            'email': "TEXT NOT NULL DEFAULT ''", 'telefono': "TEXT NOT NULL DEFAULT ''",
+            'fecha_cierre': 'TEXT',
+        }.items():
+            if column not in columns:
+                con.execute(f'ALTER TABLE oportunidades ADD COLUMN {column} {definition}')
+        con.executescript("""
+        CREATE TABLE IF NOT EXISTS fichas_consulta (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          codigo TEXT NOT NULL UNIQUE,
+          oportunidad_id INTEGER REFERENCES oportunidades(id),
+          titulo TEXT NOT NULL DEFAULT '',
+          cliente TEXT NOT NULL DEFAULT '', contacto TEXT NOT NULL DEFAULT '',
+          producto TEXT NOT NULL DEFAULT '', cantidad INTEGER,
+          tipo_consulta TEXT NOT NULL DEFAULT 'sin_clasificar',
+          presentacion TEXT NOT NULL DEFAULT '', packaging TEXT NOT NULL DEFAULT '',
+          requisitos_json TEXT NOT NULL DEFAULT '[]', datos_faltantes_json TEXT NOT NULL DEFAULT '[]',
+          resumen TEXT NOT NULL DEFAULT '',
+          creada_en TEXT NOT NULL, actualizada_en TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_fichas_oportunidad ON fichas_consulta(oportunidad_id);
+        CREATE INDEX IF NOT EXISTS idx_inbox_ficha ON bandeja_consultas(ficha_id);
+        CREATE INDEX IF NOT EXISTS idx_inbox_email ON bandeja_consultas(email_remitente);
+        CREATE INDEX IF NOT EXISTS idx_inbox_telefono ON bandeja_consultas(telefono_remitente);
+        """)
+        # No convertimos fichas existentes en datos nuevos inventados. Se generan
+        # las fichas numeradas para los mensajes históricos con id estable.
+        for row in con.execute('SELECT * FROM bandeja_consultas WHERE ficha_id IS NULL ORDER BY id').fetchall():
+            stamp = row['recibido_el']
+            cur = con.execute("""INSERT INTO fichas_consulta
+                (codigo,oportunidad_id,titulo,cliente,contacto,creada_en,actualizada_en)
+                VALUES ('PENDIENTE',?,?,?,?,?,?)""",
+                (row['oportunidad_id'],f"Consulta de {row['cliente']}",row['cliente'],row['contacto'],stamp,stamp))
+            ficha = cur.lastrowid
+            con.execute('UPDATE fichas_consulta SET codigo=? WHERE id=?',
+                        (f"CON-{stamp[:4]}-{ficha:05d}",ficha))
+            con.execute('UPDATE bandeja_consultas SET ficha_id=? WHERE id=?',(ficha,row['id']))
         # Se agregan mensajes ficticios también a bases SQLite existentes.
         if not con.execute("SELECT COUNT(*) FROM bandeja_consultas").fetchone()[0]:
             from datetime import datetime, timezone
@@ -143,6 +190,16 @@ def init_db(db_path: Path) -> None:
                 received = (now - timedelta(hours=horas)).isoformat(timespec='seconds')
                 con.execute("""INSERT INTO bandeja_consultas(cliente, contacto, texto, recibido_el, estado)
                        VALUES (?, ?, ?, ?, ?)""", (cliente, contacto, texto, received, estado))
+        for row in con.execute('SELECT * FROM bandeja_consultas WHERE ficha_id IS NULL ORDER BY id').fetchall():
+            stamp = row['recibido_el']
+            cur = con.execute("""INSERT INTO fichas_consulta
+                (codigo,titulo,cliente,contacto,creada_en,actualizada_en)
+                VALUES ('PENDIENTE',?,?,?,?,?)""",
+                (f"Consulta de {row['cliente']}",row['cliente'],row['contacto'],stamp,stamp))
+            ficha = cur.lastrowid
+            con.execute('UPDATE fichas_consulta SET codigo=? WHERE id=?',
+                        (f"CON-{stamp[:4]}-{ficha:05d}",ficha))
+            con.execute('UPDATE bandeja_consultas SET ficha_id=? WHERE id=?',(ficha,row['id']))
         if con.execute("SELECT COUNT(*) FROM oportunidades").fetchone()[0]:
             return
         today = date.today()
