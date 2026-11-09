@@ -64,6 +64,15 @@ def find_sender_ficha(con, email: str, phone: str):
     # Nunca vinculamos automáticamente solo por nombre de empresa/persona.
     if not email and not phone:
         return None
+    # Una nueva gestion iniciada por el vendedor tiene prioridad sobre el historial.
+    keys=[k for k in ('e:'+email if email else '', 't:'+phone if phone else '') if k]
+    mapping=con.execute('SELECT DISTINCT ficha_id FROM remitentes_gestiones WHERE clave IN ('+','.join('?' for _ in keys)+')',keys).fetchall()
+    pinned={int(r['ficha_id']) for r in mapping}
+    if len(pinned)==1:
+        pinned_id=next(iter(pinned))
+        active=con.execute("SELECT 1 FROM fichas_consulta WHERE id=? AND estado_gestion NOT IN ('concretada','no_concretada','resuelta')",(pinned_id,)).fetchone()
+        if active:return pinned_id
+    if len(pinned)>1:return None
     rows = con.execute('''SELECT DISTINCT c.ficha_id FROM bandeja_consultas c
        WHERE c.ficha_id IS NOT NULL AND
        ((? <> '' AND LOWER(c.email_remitente)=?) OR (? <> '' AND c.telefono_remitente=?))''',
@@ -75,7 +84,12 @@ def find_sender_ficha(con, email: str, phone: str):
        WHERE (? <> '' AND LOWER(o.email)=?) OR (? <> '' AND o.telefono=?)''',
        (email,email,phone,phone)).fetchall()
     matches.update(int(r['id']) for r in verified)
-    return next(iter(matches)) if len(matches)==1 else None
+    if len(matches)==1:
+        choice=next(iter(matches))
+        closed=con.execute("SELECT estado_gestion FROM fichas_consulta WHERE id=?",(choice,)).fetchone()
+        return choice if closed and closed['estado_gestion'] not in ('concretada','no_concretada','resuelta') else None
+    active=[id_ for id_ in matches if con.execute("SELECT 1 FROM fichas_consulta WHERE id=? AND estado_gestion NOT IN ('concretada','no_concretada','resuelta')",(id_,)).fetchone()]
+    return active[0] if len(active)==1 else None
 
 
 def report_data(con, *, period='mes', canal='todos', responsable='', user=None):
@@ -112,8 +126,19 @@ def report_data(con, *, period='mes', canal='todos', responsable='', user=None):
         closed=[r for r in closed if (r['canal_origen'] or '').casefold()==canal.casefold()]
     if responsible:
         closed = [r for r in closed if (r['responsable'] or '').casefold() == responsible.casefold()]
+    # El cierre se mide por gestión numerada. Operaciones históricas sin gestión
+    # vinculada quedan incluidas una vez para preservar la continuidad del reporte.
+    linked_legacy={r['oportunidad_id'] for r in con.execute('SELECT oportunidad_id FROM fichas_consulta WHERE oportunidad_id IS NOT NULL')}
+    cases_closed=[dict(r) for r in con.execute('''SELECT f.*,o.responsable,COALESCE(o.canal_origen,'') AS canal_origen
+                     FROM fichas_consulta f LEFT JOIN oportunidades o ON o.id=f.oportunidad_id
+                     WHERE f.estado_gestion IN ('concretada','no_concretada') AND substr(COALESCE(f.cerrada_en,f.actualizada_en),1,10)>=?''',(since_iso,))]
+    if canal != 'todos':
+        cases_closed=[r for r in cases_closed if con.execute('SELECT 1 FROM bandeja_consultas WHERE ficha_id=? AND LOWER(canal)=? LIMIT 1',
+                      (r['id'],canal.casefold())).fetchone() or (r['canal_origen'] or '').casefold()==canal.casefold()]
+    if responsible:cases_closed=[r for r in cases_closed if (r['responsable'] or '').casefold()==responsible.casefold()]
+    legacy_closed=[r for r in closed if r['id'] not in linked_legacy]
     contacts_active = len([r for r in opps if r['estado'] not in ('ganada','perdida')])
-    channel_counts = {key:sum(1 for m in messages if m['canal'].casefold().startswith(key.casefold())) for key in ('WhatsApp','Correo')}
+    channel_counts = {key:sum(1 for m in messages if m['canal'].casefold().startswith(key.casefold())) for key in ('WhatsApp','Correo','Formulario web')}
     product_counts = {}
     for r in opps:
         name = (r['producto'] or '').strip() or 'No especificado'
@@ -133,8 +158,8 @@ def report_data(con, *, period='mes', canal='todos', responsable='', user=None):
             'sin_atender':sum(1 for m in messages if m['leido_en'] and m['estado']=='nueva'),
             'en_gestion':sum(1 for m in messages if m['estado']=='en_gestion'),
             'contactos_activos':contacts_active,
-            'concretadas':sum(1 for x in closed if x['estado']=='ganada'),
-            'no_concretadas':sum(1 for x in closed if x['estado']=='perdida'),
+            'concretadas':sum(1 for x in cases_closed if x['estado_gestion']=='concretada')+sum(1 for x in legacy_closed if x['estado']=='ganada'),
+            'no_concretadas':sum(1 for x in cases_closed if x['estado_gestion']=='no_concretada')+sum(1 for x in legacy_closed if x['estado']=='perdida'),
             'seguimientos_vencidos':overdue,
         },
         'canales':channel_counts,
@@ -194,7 +219,7 @@ class UserEdit(BaseModel):
 class ReportRequest(BaseModel):
     question: str = Field(min_length=5,max_length=1000)
     period: Literal['mes','semana','trimestre','todos'] = 'mes'
-    channel: Literal['todos','WhatsApp','Correo'] = 'todos'
+    channel: Literal['todos','WhatsApp','Correo','Formulario web'] = 'todos'
     responsable: str = Field(default='',max_length=120)
 
 
@@ -267,6 +292,9 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
             if ficha is None:
                 ficha=create_ficha(con,cliente=payload.cliente,contacto=payload.contacto,
                                    titulo=f'Consulta de {payload.cliente}',incoming_stamp=received)
+            for key in [('e:'+email if email else ''),('t:'+phone if phone else '')]:
+                if key:
+                    con.execute('INSERT INTO remitentes_gestiones(clave,ficha_id) VALUES(?,?) ON CONFLICT(clave) DO UPDATE SET ficha_id=excluded.ficha_id',(key,ficha))
             cur=con.execute('''INSERT INTO bandeja_consultas
               (cliente,contacto,canal,texto,recibido_el,estado,email_remitente,telefono_remitente,asunto,ficha_id)
               VALUES (?,?,?,?,?,'nueva',?,?,?,?)''',
@@ -277,6 +305,7 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
     @app.post('/api/inbox/{message_id}/read')
     def mark_read(message_id:int,request:Request,payload:dict):
         user=current(request,db_path)
+        if user and user['role']=='gerencia':raise HTTPException(403,'Gerencia solo consulta')
         read=payload.get('read')
         if not isinstance(read,bool):raise HTTPException(422,'El campo read debe ser booleano')
         with connect(db_path) as con:
@@ -409,7 +438,7 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
     @app.get('/api/reports/summary')
     def get_report(request:Request,period:str='mes',channel:str='todos',responsable:str=''):
         user=current(request,db_path)
-        if period not in ('mes','semana','trimestre','todos') or channel not in ('todos','WhatsApp','Correo'):
+        if period not in ('mes','semana','trimestre','todos') or channel not in ('todos','WhatsApp','Correo','Formulario web'):
             raise HTTPException(422,'Filtro inválido')
         with connect(db_path) as con:
             return report_data(con,period=period,canal=channel,responsable=responsable,user=user)
@@ -468,7 +497,7 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
             period=filters.get('periodo','mes')
             canal=filters.get('canal','todos')
             if period not in ('mes','semana','trimestre','todos'):period='mes'
-            if canal not in ('todos','WhatsApp','Correo'):canal='todos'
+            if canal not in ('todos','WhatsApp','Correo','Formulario web'):canal='todos'
             data=report_data(con,period=period,canal=canal,responsable=filters.get('responsable',''))
         elems += [Spacer(1,12),Paragraph('Indicadores consultados',styles['Heading2'])]
         rows=[['Indicador','Valor']]+[[k.replace('_',' ').capitalize(),str(v)] for k,v in data['indicadores'].items()]

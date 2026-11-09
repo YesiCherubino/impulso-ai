@@ -9,6 +9,7 @@ import secrets
 from openai import OpenAIError
 from . import ai, auth
 from .business_v2 import register_business_v2
+from .business_v3 import init_v3, register_business_v3
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -31,6 +32,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
     async def lifespan(app: FastAPI):
         init_db(db_path)
         auth.init_auth(db_path)
+        init_v3(db_path)
         yield
 
     # Para demos públicas, la clave de acceso es obligatoria y no se expone en Next.js.
@@ -438,8 +440,15 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
         return get_opportunity(opportunity_id)
 
     # El servicio se inyecta para permitir tests offline y para evitar llamadas reales en CI.
-    app.state.analizar_consulta = ai.analizar_consulta
-    app.state.generar_seguimiento = ai.generar_seguimiento
+    def get_ai_profile():
+        with connect(db_path) as con:
+            try:
+                row=con.execute('SELECT * FROM ia_configuracion WHERE id=1').fetchone()
+                return dict(row) if row else {}
+            except Exception:
+                return {}
+    app.state.analizar_consulta = lambda texto: ai.analizar_consulta(texto, get_ai_profile())
+    app.state.generar_seguimiento = lambda contexto: ai.generar_seguimiento(contexto, get_ai_profile())
 
     @app.post('/api/ai/analyze-inquiry', response_model=ai.ConsultaExtraida, dependencies=[Depends(require_access)])
     def analyze_inquiry(payload: ConsultaInput):
@@ -519,6 +528,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
             raise HTTPException(503, 'No se pudo generar el correo. Verificá OpenAI e intentá nuevamente.') from exc
 
     register_business_v2(app, db_path, reserve_ai_call)
+    register_business_v3(app, db_path)
     return app
 
 app = create_app()

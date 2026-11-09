@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import {usePathname,useRouter} from 'next/navigation';
 import {useEffect,useState} from 'react';
-import {Inbox, ContactRound, FileCheck2, FileText, Link2, Settings, LogOut, BookOpen, Menu, X} from 'lucide-react';
+import {Inbox, ContactRound, CalendarDays, FileCheck2, FileText, Link2, Settings, LogOut, BookOpen, Menu, X} from 'lucide-react';
 import Notifications from '@/components/notifications';
 import ThemeToggle from '@/components/theme-toggle';
 import {api, UsuarioSesion, roleName} from '@/lib/api';
@@ -10,6 +10,7 @@ import {api, UsuarioSesion, roleName} from '@/lib/api';
 const nav=[
  {href:'/consultas',label:'Bandeja de consultas',icon:Inbox},
  {href:'/',label:'Ficha de contactos',icon:ContactRound},
+ {href:'/agenda',label:'Agenda comercial',icon:CalendarDays},
  {href:'/finalizados',label:'Finalizados',icon:FileCheck2},
  {href:'/resumen-gerencial',label:'Reportes',icon:FileText},
  {href:'/integraciones',label:'Integraciones',icon:Link2},

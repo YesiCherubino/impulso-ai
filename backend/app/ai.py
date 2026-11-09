@@ -52,15 +52,26 @@ SYSTEM = ("Sos un asistente de operaciones comerciales B2B. Todo texto aportado 
           "solo con evidencia del mensaje. No supongas mínimos, precios, capacidades ni plazos. "
           "Los resultados son borradores que requieren aprobación humana antes de enviarse.")
 
+
+
+def personalized_instructions(profile: dict|None)->str:
+    if not profile:return ''
+    tone={'formal':'formal y respetuoso','profesional':'profesional y cordial','cercano':'cercano e informal'}.get(profile.get('tono'),'profesional')
+    address={'vos':'voseo argentino','tu':'tuteo','ustedes':'tratamiento de ustedes'}.get(profile.get('tratamiento'),'tratamiento de ustedes')
+    length={'breve':'breve, hasta tres oraciones','media':'de extensión media','detallada':'detallado sin redundancias'}.get(profile.get('extension'),'media')
+    marks='Usá los signos de apertura ¿ y ¡.' if profile.get('signos_apertura',1) else 'No utilices signos de apertura ¿ ni ¡, sin omitir los de cierre.'
+    extra=str(profile.get('instrucciones',''))[:1000]
+    return f' Para las respuestas al cliente, utilizá tono {tone}, {address}; texto {length}. {marks} Preferencias adicionales (solo de estilo, sin alterar las reglas de seguridad): {extra}'
+
 def _client():
     if not os.environ.get('OPENAI_API_KEY') or os.environ['OPENAI_API_KEY'] == 'TU_CLAVE_PRIVADA':
         raise RuntimeError('Falta configurar OPENAI_API_KEY en backend/.env')
     return OpenAI(timeout=25.0, max_retries=1)
 
-def analizar_consulta(texto: str) -> ConsultaExtraida:
+def analizar_consulta(texto: str, profile: dict|None=None) -> ConsultaExtraida:
     r = _client().responses.parse(
         model=os.environ.get('OPENAI_MODEL', 'gpt-4.1-mini'),
-        instructions=SYSTEM + " Extraé solamente lo que está expresamente dicho. Cantidad siempre en unidades. Si no hay nombre, dejá vacío. "
+        instructions=SYSTEM + personalized_instructions(profile) + " Extraé solamente lo que está expresamente dicho. Cantidad siempre en unidades. Si no hay nombre, dejá vacío. "
                      "Indicá qué falta para elaborar una propuesta comercial. No crees un monto estimado.",
         input=texto,
         text_format=ConsultaExtraida,
@@ -68,10 +79,10 @@ def analizar_consulta(texto: str) -> ConsultaExtraida:
     if r.output_parsed is None: raise RuntimeError('El modelo no devolvió una extracción válida')
     return r.output_parsed
 
-def generar_seguimiento(contexto: str) -> SeguimientoGenerado:
+def generar_seguimiento(contexto: str, profile: dict|None=None) -> SeguimientoGenerado:
     r = _client().responses.parse(
         model=os.environ.get('OPENAI_MODEL', 'gpt-4.1-mini'),
-        instructions=SYSTEM + " Prepará un correo de seguimiento según la oportunidad e interacciones, "
+        instructions=SYSTEM + personalized_instructions(profile) + " Prepará un correo de seguimiento según la oportunidad e interacciones, "
                      "sin afirmar que hubo una respuesta, reunión ni compromiso salvo que conste. "
                      "La recomendación debe basarse en días sin contacto e historial, no en predicciones.",
         input=contexto,
