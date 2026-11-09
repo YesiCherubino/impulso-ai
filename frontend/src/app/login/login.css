@@ -1,0 +1,21 @@
+.login-screen{font-family:Arial,Helvetica,sans-serif;min-height:100dvh;background:#f2f4f6;display:flex;align-items:center;justify-content:center;padding:24px;color:#253745}
+.login-panel{width:100%;max-width:420px;background:#fff;border:1px solid #d9e0e5;border-radius:8px;padding:30px;box-shadow:0 3px 14px #2437470b;display:flex;flex-direction:column;gap:10px}
+.login-brand{display:flex;align-items:center;gap:12px;justify-content:flex-start;text-align:left;border-bottom:1px solid #e3e7eb;padding-bottom:19px}
+.login-brand span:last-child{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+.login-brand strong{font-size:23px;color:#253745}.login-brand small{font-size:12px;color:#6a7e8b}
+.login-mark{display:grid;place-items:center;background:#28576b;color:#fff;border-radius:5px;width:39px;height:39px;flex:none}
+.login-heading{padding:25px 0 18px}
+.login-panel h1{text-align:center;font-size:24px;margin:0;font-weight:700;color:#253745}
+.login-panel label{font-size:13px;font-weight:600;margin-top:8px}
+.login-panel input{height:44px;border:1px solid #cbd5dc;border-radius:4px;padding:9px 12px;font:inherit;width:100%;background:#fff;color:#253745}
+.login-panel input:focus{outline:2px solid #83a5b7;outline-offset:1px}
+.password-field{position:relative;display:flex;align-items:center;width:100%}
+.password-field input{padding-right:54px;width:100%;min-width:0}
+.login-panel .password-toggle{position:absolute;right:5px;top:50%;transform:translateY(-50%);background:transparent;color:#526574;border:0;border-radius:4px;margin:0;display:grid;place-items:center;width:42px;height:38px;cursor:pointer}
+.login-panel .password-toggle:hover{background:#f1f4f6}
+.login-panel .password-toggle:focus-visible{outline:2px solid #28576b;outline-offset:1px}
+.login-panel .login-submit{background:#28576b;color:#fff;border:0;padding:13px;border-radius:4px;margin-top:15px;font-weight:600;cursor:pointer;min-height:45px}
+.login-panel .login-submit:disabled{opacity:.65;cursor:wait}
+.login-error{display:flex;align-items:center;gap:10px;background:#fff0ee;color:#9f3228;border:1px solid #f2c9c5;padding:12px;font-size:13px;font-weight:600;border-radius:4px;margin-top:7px}
+.login-error svg{flex:none}
+@media(max-width:480px){.login-screen{padding:14px}.login-panel{padding:23px 20px}.login-heading{padding:21px 0 13px}}

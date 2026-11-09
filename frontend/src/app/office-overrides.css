@@ -1,0 +1,208 @@
+/* Identidad sobria de backoffice: jerarquía, densidad operativa y controles táctiles. */
+.office-app {--pine:#244d60;--pine-dark:#1c3544;--mint:#e8eff3;--ink:#243641;--muted:#6b7c86;--surface:#f4f6f8;--border:#dbe2e7;background:var(--surface);color:var(--ink)}
+.office-app .sidebar{background:#fff;border-right:1px solid #dde4e9}
+.office-app .office-brand-row{display:flex;align-items:center;justify-content:space-between;min-width:0}
+.office-app .brand{gap:9px}.office-app .brand-icon{background:#274f63;color:white;border-radius:5px;width:34px;height:34px;display:grid;place-items:center}
+.office-app .brand strong{font-weight:700;font-size:20px;color:#273b46;letter-spacing:-.03em}.office-app .brand small{color:#758590}
+.office-app .side-group-label{font-size:10px;letter-spacing:.07em;color:#7b8b95;font-weight:700}
+.office-app .side-nav{gap:3px}.office-app .side-nav a{border-radius:5px;padding:12px 11px;font-size:13px;color:#526572;gap:12px}.office-app .side-nav a.active{background:#e8eff3;color:#254e61;font-weight:700}.office-app .side-nav a:hover{background:#f0f4f6;color:#243c4a}
+.office-sidebar-footer{margin-top:auto;padding:16px 11px;border-top:1px solid #e7ecf0;color:#788892;display:grid;gap:8px}.office-sidebar-footer small{font-size:11px;line-height:1.5}.office-env-marker{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#586b78}
+.office-close-menu{display:none;border:0;background:transparent;color:#4e6774;padding:8px}.office-app .topbar{border-bottom:1px solid #dce3e8;background:#fff;min-height:62px}.office-app .top-label{color:#5d7280;font-size:12px}.office-app .top-label span{padding:0 10px;color:#a0adb5}.office-app .top-right{font-size:12px;color:#60717a;gap:9px}.office-app .demo-pill{border:1px solid #d5e1e7;background:#f3f7f9;border-radius:3px;color:#537182;font-weight:600;letter-spacing:.06em;font-size:10px;padding:5px 7px}
+.office-app .content{max-width:1600px}.office-app .panel,.office-app .stat{border:1px solid #dae3e8;border-radius:6px;box-shadow:none;background:#fff}.office-app .btn{border-radius:4px;font-weight:600;min-height:38px}.office-app .btn-primary{background:#295d77;border-color:#295d77;color:#fff}.office-app .btn-primary:hover{background:#204e65}.office-app .btn-outline{border-color:#cdd9e0;color:#355769;background:#fff}.office-app .btn-outline:hover{background:#f1f6f8}.office-app h1,.office-app h2,.office-app h3{color:#243b4a}
+.office-app .page-head h1,.office-app .bo-head h1{font-size:25px;letter-spacing:-.025em}.office-app .page-head p,.office-app .bo-head p{color:#6b7c86}.office-app .bo-breadcrumb,.office-app .eyebrow,.office-app .section-eyebrow{letter-spacing:.055em;color:#678193;font-size:10px}.office-app .operations-strip{border-left-color:#527a91;border-color:#dce5eb;background:#fff;border-radius:5px}.office-app .stat strong{color:#2c495a}.office-app .stat-icon{color:#467185;background:#eff4f6}.office-app .count-chip{background:#edf2f5;color:#496a7c}.office-app .avatar,.office-app .small-avatar{background:#e8eff2;color:#4c6878}.office-app .table-panel table th{color:#687b87;background:#f3f6f8}.office-app .status{border-radius:3px}
+.office-app .bo-head{margin-bottom:16px}.office-app .bo-banner{border-color:#d9e3e9;background:#f1f5f7;border-radius:5px}.office-app .bo-banner span{color:#35596c}.office-app .bo-banner p{color:#6c818d}.office-app .bo-summary{margin-bottom:13px}.office-app .bo-summary>div{border-color:#dce4e9;border-radius:5px;padding:10px 14px}.office-app .bo-summary strong{color:#2d5267}.office-app .bo-summary span{color:#6a7e88}
+.office-app .bo-layout{gap:0;grid-template-columns:minmax(300px,.87fr) minmax(0,1.5fr);min-height:620px}.office-app .bo-list{border-radius:5px 0 0 5px;border-right:0}.office-app .bo-detail{border-radius:0 5px 5px 0}.office-app .bo-list-header{padding:16px 16px 11px}.office-app .bo-search{margin:0 14px 12px;border-radius:4px;border-color:#cedce4}.office-app .bo-search input{height:38px}.office-app .bo-filters{padding:0 11px 10px;border-color:#e1e9ed}.office-app .bo-filters button{border-radius:3px}.office-app .bo-filters button.selected{background:#e9f0f4;color:#2c5970}.office-app .bo-rows{max-height:740px}.office-app .bo-row{padding:14px 13px}.office-app .bo-row:hover,.office-app .bo-row.is-selected{background:#eef4f7}.office-app .bo-row.is-selected{box-shadow:inset 3px 0 #467b95}.office-app .bo-row-avatar{border-radius:5px;background:#e6eef2;color:#47677a}.office-app .bo-row-person,.office-app .bo-row-preview{color:#667c88}.office-app .bo-state{border-radius:3px}.office-app .bo-state-en_gestion{background:#e8eff9;color:#376588}.office-app .bo-state-resuelta{background:#edf4ee;color:#447354}
+.office-app .bo-detail-head{padding:16px 20px;border-color:#e1e8ec}.office-app .bo-person h2{font-size:16px}.office-app .bo-conversation{background:#f8fafb;padding:20px;border-color:#e2e8ec;min-height:160px}.office-app .bo-bubble{border-color:#dfe7ec;border-radius:5px;padding:15px 16px;line-height:1.65;color:#304c5c;box-shadow:none}.office-app .bo-work{padding:19px 20px}.office-app .bo-hint{color:#798994}.office-app .bo-data-grid>div{background:#f7f9fa;border-color:#e1e7eb}.office-app .bo-ai-result{border-color:#dfe7ec}.office-app .bo-draft textarea{border-color:#d1dee6;color:#294557}
+.office-app .bo-back{color:#326781}.office-app .alert.error{border-radius:4px}.office-app .office-kicker{font-size:10px;color:#6e8491;letter-spacing:.055em;font-weight:700}.office-page-title{margin-bottom:22px}.office-page-title h1{font-size:26px;margin:7px 0}.office-page-title p{color:#687a86;margin:0}.office-notice{border:1px solid #dbe5eb;border-left:3px solid #6f95a9;border-radius:4px;background:#f0f5f8;display:flex;gap:12px;padding:14px 16px;margin-bottom:18px;color:#476373}.office-notice p{margin:5px 0 0;line-height:1.6;font-size:12px}.office-integrations-list{border:1px solid #dce4e9;border-radius:5px;background:white;overflow:hidden}.office-integration{display:flex;gap:16px;padding:20px;border-bottom:1px solid #e1e7eb;align-items:flex-start}.office-integration:last-child{border-bottom:0}.office-integration-logo{display:grid;place-items:center;color:#456d82;border:1px solid #dce6eb;background:#f2f6f8;border-radius:5px;width:42px;height:42px;flex:none}.office-integration-main{flex:1;min-width:0}.office-integration-header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.office-integration-header h2{font-size:16px;margin:0}.office-integration-main small{display:block;color:#84939b;margin-top:5px}.office-integration-main p{line-height:1.7;color:#586e7a;margin:10px 0 0;font-size:13px}.office-planned{padding:4px 7px;background:#eff2f5;color:#6b7d87;border-radius:3px;font-size:10px}.office-integration-arrow{color:#abb7be}.office-connection-plan{border:1px solid #dce4e9;background:#fff;border-radius:5px;margin-top:18px;padding:22px}.office-connection-plan h2{font-size:16px;margin:0 0 10px}.office-connection-plan p,.office-connection-plan li{font-size:13px;color:#617782;line-height:1.8}
+@media(max-width:800px){.office-app .sidebar.sidebar-open{background:#fff}.office-close-menu{display:block}.office-app .sidebar:not(.sidebar-open) .office-close-menu{display:none}.office-app .sidebar-open .office-sidebar-footer{display:grid}.office-app .bo-layout{grid-template-columns:1fr;gap:0}.office-app .bo-list{border-radius:5px}.office-app .bo-detail{border-radius:5px}.office-app .bo-rows{max-height:none}.office-app .mobile-nav-toggle{border-radius:4px;color:#345d70;background:#edf3f7}}
+@media(max-width:620px){.office-app .content{padding-left:12px;padding-right:12px}.office-app .topbar{min-height:56px}.office-app .top-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.office-app .office-api-label{display:none}.office-app .bo-head h1{font-size:22px}.office-app .bo-head>.btn{font-size:0;min-width:42px;justify-content:center}.office-app .bo-head>.btn svg{width:18px;height:18px}.office-app .bo-summary>div{padding:9px 6px}.office-app .bo-summary strong{font-size:19px}.office-app .bo-summary span{font-size:10px}.office-app .bo-layout.bo-selected .bo-list{display:none}.office-app .bo-layout:not(.bo-selected) .bo-detail{display:none}.office-app .bo-row{min-height:94px}.office-app .bo-detail-head{padding:15px}.office-app .bo-work{padding:15px}.office-app .bo-conversation{padding:15px}.office-app .bo-actions .btn{min-height:43px}.office-app .bo-back{min-height:40px}.office-integration{padding:15px;gap:11px}.office-connection-plan{padding:15px}}
+
+/* Ajustes operativos — bandeja compacta, filtros sin scroll y acciones claras. */
+.office-app .bo-layout {grid-template-columns:minmax(340px,38fr) minmax(0,62fr);align-items:stretch;min-width:0}
+.office-app .bo-list,.office-app .bo-detail {min-width:0}
+.office-app .bo-rows {max-height:780px}
+.office-app .bo-row {padding:11px 12px}
+.office-app .bo-row-main {min-width:0}
+.office-app .bo-row-top strong {min-width:0}
+.office-app .bo-row-top small {white-space:nowrap}
+.office-app .bo-list-header {padding:13px 13px 9px}
+.office-app .bo-search {margin:0 12px 9px}
+.office-app .bo-filters {display:flex;flex-wrap:wrap;overflow-x:visible;gap:3px;padding:0 10px 9px}
+.office-app .bo-filters button {font-size:11px;padding:7px 7px;white-space:nowrap}
+.office-app .bo-filter-select {display:none}
+.office-app .bo-detail-head {padding:12px 15px}
+.office-app .bo-person h2 {font-size:15px}
+.office-app .bo-conversation {min-height:0;padding:13px 16px}
+.office-app .bo-time {margin-bottom:7px}
+.office-app .bo-bubble {padding:11px 13px;line-height:1.5;max-width:none}
+.office-app .bo-work {padding:14px 16px}
+.office-app .bo-work-title {margin-bottom:9px}
+.office-app .bo-work-title h3 {font-size:15px}
+.office-app .bo-actions {display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.office-app .bo-actions .btn {min-height:36px;font-size:12px;padding:8px 10px;white-space:nowrap}
+.office-app .btn-quiet {background:#fff;color:#566d79;border:1px solid #d1dde3}
+.office-app .btn-quiet:hover {background:#eef3f6}
+.office-app .bo-hint {margin:8px 0 0;line-height:1.4}
+.office-app .bo-ai-result {margin-top:12px;padding-top:13px;gap:11px}
+.office-app .bo-ai-result h3 {font-size:14px}
+.office-app .bo-data-grid {gap:7px}
+.office-app .bo-data-grid>div {padding:8px 10px;gap:3px}
+.office-app .bo-data-grid small {font-size:11px}
+.office-app .bo-missing {line-height:1.5}
+.office-app .bo-missing ul {margin:4px 0 0}
+.office-app .bo-draft {gap:7px}
+.office-app .bo-draft textarea {min-height:110px;padding:10px;line-height:1.5}
+.office-app .bo-draft-bottom {display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.office-app .bo-draft-bottom small {font-size:11px}
+@media (max-width:1150px) and (min-width:801px) {
+ .office-app .bo-layout {grid-template-columns:minmax(315px,40fr) minmax(0,60fr)}
+ .office-app .bo-filters button {font-size:10px;padding:6px 5px}
+ .office-app .bo-filters span {font-size:10px}
+}
+@media (max-width:970px) and (min-width:801px) {
+ .office-app .bo-filters button {display:none}
+ .office-app .bo-filter-select {display:block;width:100%}
+}
+.office-app .bo-filter-select select {width:100%;height:36px;border:1px solid #cad9e1;border-radius:4px;background:#fff;color:#344f5d;padding:0 9px;font-size:12px}
+@media (max-width:800px) {
+ .office-app .bo-layout {grid-template-columns:1fr}
+ .office-app .bo-list {border-radius:5px;border-right:1px solid #dbe2e7}
+ .office-app .bo-detail {border-radius:5px}
+ .office-app .bo-filters button {display:none}
+ .office-app .bo-filter-select {display:block;width:100%}
+ .office-app .bo-rows {max-height:none}
+ .office-app .bo-actions .btn {flex:1 1 auto}
+}
+@media (max-width:620px) {
+ .office-app .bo-layout.bo-selected .bo-list {display:none}
+ .office-app .bo-layout:not(.bo-selected) .bo-detail {display:none}
+ .office-app .bo-back {display:flex}
+ .office-app .bo-actions {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+ .office-app .bo-actions .btn {justify-content:center;white-space:normal;min-height:44px;font-size:12px;padding:8px}
+ .office-app .bo-actions .btn:nth-child(2) {grid-column:auto}
+ .office-app .bo-data-grid {grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+ .office-app .bo-draft-bottom {align-items:stretch;flex-direction:column}
+ .office-app .bo-draft-bottom .btn {align-self:flex-start}
+}
+
+.office-app .sr-only {position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* Interfaz operativa, sin elementos promocionales */
+.office-app .topbar{justify-content:flex-start}
+.office-app .office-sidebar-footer{gap:7px}
+.office-user-heading{font-size:10px;color:#8798a2;text-transform:uppercase;letter-spacing:.08em}
+.office-user-button{display:flex;gap:10px;align-items:center;border:none;background:transparent;color:#344f60;padding:5px 0;text-align:left;width:100%;font-weight:600;font-size:12px}
+.office-user-avatar{width:30px;height:30px;background:#e8edf1;border-radius:4px;display:grid;place-items:center;color:#355a6c}
+.office-user-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.office-user-edit{display:grid;gap:7px}
+.office-user-edit input{height:34px;min-width:0;border:1px solid #d1dce3;border-radius:4px;padding:6px}
+.office-user-save{border:1px solid #cbd8e1;background:#f1f5f7;border-radius:4px;padding:7px;font-size:12px;color:#31566b}
+.bo-contact-form{border:1px solid #d8e2e9;background:#f9fbfc;padding:14px;margin:12px 0;border-radius:4px;display:grid;gap:13px}
+.bo-form-title{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.bo-contact-form label{display:grid;gap:6px;font-size:12px;color:#59707d}
+.bo-contact-form input{width:100%;min-width:0;max-width:100%;height:36px;border:1px solid #cbd9e1;background:#fff;border-radius:4px;padding:7px 9px;font-size:13px;color:#283d4b}
+.bo-contact-form .btn{justify-self:start}
+@media(max-width:620px){.bo-contact-form .bo-data-grid{grid-template-columns:1fr}.bo-contact-form .btn{width:100%;justify-content:center}}
+
+/* Gestión separada: estado, respuesta y contacto comercial */
+.office-app .bo-operation-section{padding:12px 0;border-bottom:1px solid #e1e7ec;display:grid;gap:10px}
+.office-app .bo-operation-section:last-of-type{border-bottom:0}
+.office-app .bo-operation-header h3{font-size:13px;letter-spacing:0;margin:0;color:#304c5d}
+.office-app .bo-status-line select{height:38px;width:100%;max-width:250px;border:1px solid #cbd9e1;border-radius:4px;padding:0 10px;background:#fff;color:#2a4657;font-size:13px}
+.office-app .bo-operation-section>.btn{justify-self:start}
+.office-app .bo-contact-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;border:1px solid #dce6eb;background:#f8fafb;padding:12px;border-radius:4px}
+.office-app .bo-contact-summary>div{display:grid;gap:3px;min-width:0}
+.office-app .bo-contact-summary small{color:#778996;font-size:11px}
+.office-app .bo-contact-summary strong{overflow-wrap:anywhere;font-size:13px}
+.office-app .bo-contact-summary p{grid-column:1/-1;margin:2px 0;color:#697f8b;font-size:11px}
+.office-app .office-guide-link{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:600;color:#375d72;text-decoration:none;padding:9px 5px;border-bottom:1px solid #e5eaef;margin-bottom:5px}
+.office-app .office-guide-link:hover{color:#173e57;text-decoration:underline}
+@media(max-width:620px){.office-app .bo-operation-section>.btn{width:100%;justify-content:center}.office-app .bo-status-line select{max-width:none}.office-app .bo-contact-summary{grid-template-columns:1fr}}
+
+/* Actualización de backoffice: una sola pantalla de contactos y resumen sin tarjetas. */
+.office-app .topbar{justify-content:space-between;gap:16px}
+.office-app .topbar-actions{display:flex;align-items:center;gap:15px;margin-left:auto;flex-shrink:0}
+.office-app .guide-header-link{display:inline-flex;align-items:center;gap:7px;color:#315b73;font-size:12px;font-weight:600;white-space:nowrap;text-decoration:none}
+.office-app .guide-header-link:hover{text-decoration:underline}
+.office-app .notification-widget{position:relative}
+.office-app .notification-trigger{height:37px;min-width:37px;border:1px solid #d4dfe5;background:#fff;border-radius:5px;display:grid;place-items:center;color:#35576b;position:relative}
+.office-app .notification-trigger:hover{background:#f1f5f8}
+.office-app .notification-badge{position:absolute;right:-7px;top:-7px;display:grid;place-items:center;background:#b43b35;color:#fff;font-size:10px;font-weight:700;border-radius:10px;min-width:19px;height:19px;padding:0 4px}
+.office-app .notification-popover{position:absolute;top:45px;right:0;width:min(365px,calc(100vw - 24px));max-height:450px;background:#fff;border:1px solid #d5e0e7;border-radius:6px;box-shadow:0 13px 32px #182b3d22;z-index:55;overflow:hidden}
+.office-app .notification-heading{display:flex;justify-content:space-between;align-items:center;padding:14px;border-bottom:1px solid #e4eaf0;color:#293d4d}
+.office-app .notification-heading button{border:0;background:none;color:#46667a;font-size:12px}
+.office-app .notification-list{max-height:385px;overflow-y:auto}
+.office-app .notification-empty{padding:15px;color:#819099;font-size:12px;margin:0}
+.office-app .notification-item{width:100%;display:flex;gap:10px;align-items:flex-start;border:0;border-bottom:1px solid #e9edf0;padding:13px 14px;background:#f1f6f9;text-align:left;color:#2d4353;cursor:pointer}
+.office-app .notification-item.is-read{background:#fff}
+.office-app .notification-item:hover{background:#eaf1f6}
+.office-app .notification-item-icon{color:#58788a;padding-top:2px;flex-shrink:0}
+.office-app .notification-item-body{display:grid;gap:5px;min-width:0;flex:1}
+.office-app .notification-item-body strong{font-size:12px}
+.office-app .notification-item-body small{color:#667b86;font-size:11px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.office-app .notification-unread{width:7px;height:7px;border-radius:50%;background:#28708f;flex-shrink:0;margin-top:5px}
+.office-app .simple-head{margin-bottom:20px}.office-app .simple-head h1{font-size:27px;margin:0}
+.office-app .resume-table{padding:0 18px;margin-bottom:18px;overflow:hidden}
+.office-app .resume-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 0 8px}
+.office-app .resume-heading h2{margin:0;font-size:17px}
+.office-app .resume-heading small{font-size:11px;color:#7e9099}
+.office-app .resume-row{display:flex;align-items:center;justify-content:space-between;gap:15px;width:100%;padding:12px 5px;border:0;border-bottom:1px solid #e6ebef;background:transparent;text-align:left;color:#334958;font-size:13px}
+.office-app .resume-row:last-child{border-bottom:0}
+.office-app .resume-row strong{font-weight:700;white-space:nowrap;font-size:14px;font-variant-numeric:tabular-nums}
+.office-app .resume-row:hover{background:#f3f7fa}
+.office-app .resume-row.is-active{background:#e7f0f5;color:#224e67;box-shadow:inset 3px 0 #356d8b}
+.office-app .compact-contact-table{scroll-margin-top:18px}
+.office-app .compact-contact-table .section-head.table-head{align-items:center}
+.office-app .compact-contact-table .section-head.table-head h2{margin:0}
+.office-app .compact-toolbar{flex-wrap:wrap;gap:8px}
+.office-app .compact-toolbar select{min-width:165px;max-width:270px}
+.office-app .compact-toolbar .search{flex:1 1 210px}
+.office-app .clear-filter{min-height:38px}
+.office-app .compact-contact-table table td{vertical-align:middle}
+.office-app .compact-contact-table .table-client{gap:0}
+.office-app .compact-contact-table .table-client strong{font-size:13px}
+.office-app .report-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:18px}
+.office-app .report-metrics>div{border:1px solid #dae3e8;background:#fff;border-radius:5px;padding:16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.office-app .report-metrics span{font-size:13px;color:#617685}.office-app .report-metrics strong{font-size:23px;color:#263e4d}
+.office-app .report-pending{padding:22px}.office-app .report-pending h2{font-size:18px;margin:0 0 11px}
+.office-app .report-pending-row{display:flex;justify-content:space-between;align-items:center;gap:14px;border-bottom:1px solid #e5ebef;padding:13px 0}
+.office-app .report-pending-row:last-child{border-bottom:0}.office-app .report-pending-row p{margin:6px 0 0}
+.office-app .bo-head-actions{display:flex;gap:7px;flex-wrap:wrap}
+.office-app .bo-filters{gap:5px;border-bottom:1px solid #e3eaee;padding:6px 11px 10px}
+.office-app .bo-filters .bo-filter-tab{border:1px solid #d6e0e6;border-radius:5px;min-height:34px;padding:7px 11px;font-size:12px;font-weight:600;color:#385368;background:#fff}
+.office-app .bo-filters .bo-filter-tab.selected{background:#e4edf3;color:#244e65;border-color:#b9cbd6}
+.office-app .bo-filters .bo-filter-nueva.selected{background:#fff1db;border-color:#f0d3a9;color:#91591a}
+.office-app .bo-filters .bo-filter-en_gestion.selected{background:#e7eff9;border-color:#bbd2eb;color:#2e648d}
+.office-app .bo-filters .bo-filter-resuelta.selected{background:#e7f3eb;border-color:#bfd8c7;color:#306f47}
+.office-app .bo-state-nueva{background:#fff0db;color:#925b16}
+.office-app .bo-state-en_gestion{background:#e7effa;color:#2c608c}
+.office-app .bo-state-resuelta{background:#e5f3e9;color:#2b7443}
+.office-app .new-consultation-form{padding:17px 20px;margin-bottom:16px;display:grid;gap:12px}
+.office-app .new-consultation-form h2{margin:0;font-size:17px}
+.office-app .new-consultation-form label{display:grid;gap:5px;font-size:12px;font-weight:600;color:#35556a}
+.office-app .new-consultation-form input,.office-app .new-consultation-form textarea{width:100%;border:1px solid #cad8e1;border-radius:4px;padding:9px;color:#253d4b;resize:vertical;min-width:0;background:#fff}
+.office-app .new-consultation-actions{display:flex;align-items:center;gap:9px}
+.office-app .bo-saved-indicator{margin:0;color:#6d8290;font-size:11px}
+@media(min-width:801px){.office-app .bo-filters .bo-filter-select{display:none}}
+@media(max-width:1180px) and (min-width:801px){.office-app .bo-filters .bo-filter-tab{padding:7px 7px;font-size:11px}}
+@media(max-width:970px) and (min-width:801px){.office-app .bo-filters .bo-filter-tab{display:none}.office-app .bo-filters .bo-filter-select{display:block}}
+@media(max-width:800px){.office-app .bo-filters .bo-filter-tab{display:none}.office-app .bo-filters .bo-filter-select{display:block}}
+@media(max-width:620px){.office-app .content{padding-top:20px}.office-app .guide-header-link span{display:none}.office-app .guide-header-link{width:36px;height:36px;display:grid;place-items:center;border:1px solid #d6e0e7;border-radius:4px}.office-app .topbar-actions{gap:8px}.office-app .simple-head h1{font-size:22px}.office-app .simple-head .btn{padding:9px}.office-app .compact-contact-table .table-scroll{overflow:visible}.office-app .compact-contact-table table,.office-app .compact-contact-table tbody,.office-app .compact-contact-table tr,.office-app .compact-contact-table td{display:block;width:100%}.office-app .compact-contact-table thead{display:none}.office-app .compact-contact-table tr{border-bottom:1px solid #e3ebef;padding:12px}.office-app .compact-contact-table td{padding:3px 0!important;border:0!important;display:flex;align-items:center;justify-content:space-between;gap:14px;text-align:right}.office-app .compact-contact-table td:before{content:attr(data-label);font-size:11px;color:#80909b;text-align:left;flex:none}.office-app .compact-contact-table td:first-child{justify-content:flex-start}.office-app .compact-contact-table td:first-child:before{display:none}.office-app .compact-contact-table td:last-child{display:none}.office-app .compact-toolbar select{max-width:none;width:100%}.office-app .resume-table{padding:0 13px}.office-app .resume-row span{font-size:12px}.office-app .resume-row strong{font-size:13px}.office-app .report-metrics{grid-template-columns:1fr}.office-app .report-pending-row{align-items:flex-start;flex-direction:column}.office-app .bo-head-actions{width:100%}.office-app .bo-head-actions .btn{font-size:12px;flex:1 1 auto}.office-app .bo-head .bo-head-actions .btn{font-size:12px}.office-app .new-consultation-form .bo-data-grid{grid-template-columns:1fr}}
+.office-app .follow-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:10px}
+
+/* Etapas comerciales: edición desde la ficha y archivo de contactos finalizados. */
+.office-app .commercial-status-editor{padding:14px 18px;margin-bottom:16px;display:grid;gap:11px}
+.office-app .commercial-status-editor__label{display:flex;align-items:center;gap:12px;flex-wrap:wrap;color:#2b4353;font-size:13px}
+.office-app .commercial-status-editor__controls{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.office-app .commercial-status-editor__controls select{min-height:39px;min-width:210px;border:1px solid #cddce5;background:#fff;color:#304b5c;border-radius:4px;padding:0 12px;font-size:13px}
+.office-app .commercial-status-editor__controls .btn{min-height:39px}
+.office-app .commercial-status-editor__success{margin:0;font-size:12px;color:#276841}
+.office-app .commercial-status-editor__notice{margin:0;color:#597483;font-size:12px;line-height:1.5}
+.office-app .commercial-status-editor__notice a{color:#276184;font-weight:600}
+.office-app .finalizados-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px 18px;border-bottom:1px solid #e4ebef}
+.office-app .finalizados-tabs{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+.office-app .finalizados-tab{display:flex;gap:7px;align-items:center;background:#fff;border:1px solid #d3dfe6;color:#385566;padding:9px 13px;border-radius:4px;font-size:12px;cursor:pointer}
+.office-app .finalizados-tab span{color:#718795;font-weight:600;font-variant-numeric:tabular-nums}
+.office-app .finalizados-tab.is-selected{background:#e5edf3;border-color:#b6cad7;color:#254b63;font-weight:700}
+.office-app .finalizados-search{width:min(340px,100%)}
+@media(max-width:620px){.office-app .commercial-status-editor{padding:13px}.office-app .commercial-status-editor__controls{flex-direction:column;align-items:stretch}.office-app .commercial-status-editor__controls select{width:100%}.office-app .commercial-status-editor__controls .btn{justify-content:center}.office-app .finalizados-toolbar{padding:12px}.office-app .finalizados-search{width:100%}.office-app .finalizados-tabs{width:100%}.office-app .finalizados-tab{flex:1 1 auto;justify-content:center}}

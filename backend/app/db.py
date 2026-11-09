@@ -24,6 +24,60 @@ CREATE TABLE IF NOT EXISTS interacciones (
  fecha TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_interacciones_oportunidad ON interacciones(oportunidad_id);
+CREATE TABLE IF NOT EXISTS bandeja_consultas (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ cliente TEXT NOT NULL,
+ contacto TEXT NOT NULL,
+ canal TEXT NOT NULL DEFAULT 'WhatsApp (simulado)',
+ texto TEXT NOT NULL,
+ recibido_el TEXT NOT NULL,
+ estado TEXT NOT NULL DEFAULT 'nueva' CHECK (estado IN ('nueva','en_gestion','resuelta')),
+ oportunidad_id INTEGER REFERENCES oportunidades(id)
+);
+CREATE INDEX IF NOT EXISTS idx_bandeja_estado ON bandeja_consultas(estado);
+CREATE TABLE IF NOT EXISTS notificaciones (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ clave TEXT NOT NULL UNIQUE,
+ tipo TEXT NOT NULL CHECK(tipo IN ('mensaje', 'seguimiento')),
+ referencia_id INTEGER NOT NULL,
+ titulo TEXT NOT NULL,
+ detalle TEXT NOT NULL,
+ creada_en TEXT NOT NULL,
+ activa INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_notificaciones_activas ON notificaciones(activa,creada_en);
+CREATE TABLE IF NOT EXISTS notificaciones_lecturas (
+ notificacion_id INTEGER NOT NULL REFERENCES notificaciones(id) ON DELETE CASCADE,
+ usuario_id INTEGER NOT NULL,
+ leida_en TEXT NOT NULL,
+ PRIMARY KEY(notificacion_id,usuario_id)
+);
+CREATE TABLE IF NOT EXISTS consultas_analisis (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ consulta_id INTEGER NOT NULL REFERENCES bandeja_consultas(id),
+ version INTEGER NOT NULL,
+ resultado_json TEXT NOT NULL,
+ borrador TEXT NOT NULL,
+ generado_en TEXT NOT NULL,
+ actualizado_en TEXT NOT NULL,
+ UNIQUE(consulta_id, version)
+);
+CREATE INDEX IF NOT EXISTS idx_consultas_analisis ON consultas_analisis(consulta_id,version);
+CREATE TABLE IF NOT EXISTS seguimientos_ia (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ oportunidad_id INTEGER NOT NULL REFERENCES oportunidades(id),
+ version INTEGER NOT NULL,
+ resultado_json TEXT NOT NULL,
+ asunto TEXT NOT NULL,
+ mensaje TEXT NOT NULL,
+ generado_en TEXT NOT NULL,
+ actualizado_en TEXT NOT NULL,
+ UNIQUE(oportunidad_id, version)
+);
+CREATE INDEX IF NOT EXISTS idx_seguimientos_ia ON seguimientos_ia(oportunidad_id,version);
+
+
+
 """
 
 # Los nombres, contactos y montos son completamente ficticios.
@@ -38,6 +92,17 @@ SEED = [
  ("Vita Belle", "Sofía Acosta", "Acondicionador 250 ml", 2500, 9200, "perdida", 40, 25, "Cliente postergó proyecto; caso cerrado en esta demo."),
 ]
 
+# Bandeja demostrativa: no está conectada a WhatsApp, Gmail ni otros canales reales.
+INBOX_SEED = [
+ ("Aurora Cosmética", "Martina", "Hola, somos Aurora Cosmética. Queremos desarrollar una crema corporal de 250 ml y producir 3.000 unidades con envase personalizado. ¿Podrían orientarnos sobre las opciones?", 1),
+ ("Natural Care", "Valentina", "Hola, nos gustaría consultar por producción de 2.000 unidades de jabón líquido de 500 ml. ¿Qué información necesitan para preparar una cotización?", 2),
+ ("Botánica Studio", "Andrés", "Buen día, enviamos las especificaciones del envase de la máscara capilar. ¿Nos confirman si necesitan algún dato adicional para avanzar?", 3),
+ ("Nova Beauty", "Martín", "Hola, quería saber si pudieron revisar nuestra consulta sobre el shampoo de 350 ml. Necesitaríamos definir el packaging para avanzar con la propuesta.", 4),
+ ("Estudio Luma", "Julia", "Buenas tardes, tenemos una marca nueva y buscamos fabricar 5.000 unidades de crema facial. Queremos consultar por fórmula, presentación y requisitos iniciales.", 5),
+ ("Esencia Sur", "Carolina", "¿Trabajan con elaboración de perfumes para marca propia? Estamos evaluando un primer lote y queremos conocer las opciones de presentación.", 6),
+ ("Oliva Labs", "Federico", "Hola, gracias por la información enviada. Ya tenemos todo lo necesario y confirmamos que vamos a continuar por el canal comercial habitual.", 7),
+]
+
 def connect(db_path: Path) -> sqlite3.Connection:
     con = sqlite3.connect(str(db_path), timeout=10)
     con.row_factory = sqlite3.Row
@@ -48,6 +113,15 @@ def init_db(db_path: Path) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with connect(db_path) as con:
         con.executescript(SCHEMA)
+        # Se agregan mensajes ficticios también a bases SQLite existentes.
+        if not con.execute("SELECT COUNT(*) FROM bandeja_consultas").fetchone()[0]:
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc)
+            for cliente, contacto, texto, horas in INBOX_SEED:
+                estado = 'resuelta' if horas == 7 else ('en_gestion' if horas in (3, 4) else 'nueva')
+                received = (now - timedelta(hours=horas)).isoformat(timespec='seconds')
+                con.execute("""INSERT INTO bandeja_consultas(cliente, contacto, texto, recibido_el, estado)
+                       VALUES (?, ?, ?, ?, ?)""", (cliente, contacto, texto, received, estado))
         if con.execute("SELECT COUNT(*) FROM oportunidades").fetchone()[0]:
             return
         today = date.today()

@@ -9,5 +9,6 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def isolated_demo_environment(monkeypatch):
+    monkeypatch.setenv('AUTH_ENABLED', 'false')
     monkeypatch.setenv('PUBLIC_DEMO', 'false')
     monkeypatch.setenv('DEMO_ACCESS_CODE', '')

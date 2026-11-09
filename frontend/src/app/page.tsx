@@ -1,26 +1,77 @@
 'use client';
 import Link from 'next/link';
 import {useCallback,useEffect,useMemo,useState} from 'react';
-import {ArrowRight,ArrowUpRight,CalendarClock,FileText,Search,RefreshCw,TrendingUp,Users,Wallet,AlertTriangle,Plus, X, Sparkles} from 'lucide-react';
+import {ArrowUpRight,Plus,RefreshCw,Search,X} from 'lucide-react';
 import Shell from '@/components/shell';
 import {api,Resumen,Oportunidad,estadoNombre,money,dateAR} from '@/lib/api';
 
 type Form={cliente:string;contacto:string;producto:string;cantidad:string;monto_estimado_usd:string;notas:string};
 const empty:Form={cliente:'',contacto:'',producto:'',cantidad:'',monto_estimado_usd:'',notas:''};
-export default function Home(){
- const [summary,setSummary]=useState<Resumen|null>(null),[items,setItems]=useState<Oportunidad[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[search,setSearch]=useState(''),[filter,setFilter]=useState('todas'),[dialog,setDialog]=useState(false),[form,setForm]=useState<Form>(empty),[saving,setSaving]=useState(false),[saveError,setSaveError]=useState('');
- const load=useCallback(async()=>{setLoading(true);setError('');try{const [s,o]=await Promise.all([api<Resumen>('/api/dashboard'),api<Oportunidad[]>('/api/opportunities')]);setSummary(s);setItems(o);}catch(err){setError(err instanceof Error?err.message:'Error inesperado');}finally{setLoading(false)}},[]);
+type ResumenFiltro='todos'|'activos'|'cotizaciones'|'seguimiento'|'valor';
+type Orden='ultimo'|'prioridad'|'cliente_asc'|'cliente_desc'|'valor_desc'|'valor_asc';
+const activos=(o:Oportunidad)=>!['ganada','perdida'].includes(o.estado);
+export default function ContactosComerciales(){
+ const [summary,setSummary]=useState<Resumen|null>(null);
+ const [items,setItems]=useState<Oportunidad[]>([]);
+ const [loading,setLoading]=useState(true);
+ const [error,setError]=useState('');
+ const [search,setSearch]=useState('');
+ const [estado,setEstado]=useState('todas');
+ const [resumenFiltro,setResumenFiltro]=useState<ResumenFiltro>('todos');
+ const [orden,setOrden]=useState<Orden>('ultimo');
+ const [dialog,setDialog]=useState(false);
+ const [form,setForm]=useState<Form>(empty);
+ const [saving,setSaving]=useState(false);
+ const [saveError,setSaveError]=useState('');
+ const load=useCallback(async()=>{setLoading(true);setError('');try{
+  const [s,o]=await Promise.all([api<Resumen>('/api/dashboard'),api<Oportunidad[]>('/api/opportunities')]);
+  setSummary(s);setItems(o);
+ }catch(err){setError(err instanceof Error?err.message:'No se pudieron cargar los contactos');}finally{setLoading(false)}},[]);
  useEffect(()=>{void load()},[load]);
- const shown=useMemo(()=>items.filter(o=>{const q=search.toLowerCase();return [o.cliente,o.producto,o.contacto].some(v=>v.toLowerCase().includes(q)) && (filter==='todas'||(filter==='pendientes'?o.seguimiento_pendiente:o.estado===filter))}),[items,search,filter]);
- const pending=items.filter(o=>o.seguimiento_pendiente).sort((a,b)=>b.dias_sin_contacto-a.dias_sin_contacto);
- async function submit(e:React.FormEvent){e.preventDefault();setSaving(true);setSaveError('');try{await api('/api/opportunities',{method:'POST',body:JSON.stringify({cliente:form.cliente.trim(),contacto:form.contacto.trim(),producto:form.producto.trim(),cantidad:form.cantidad?Number(form.cantidad):null,monto_estimado_usd:form.monto_estimado_usd?Number(form.monto_estimado_usd):null,notas:form.notas})});setDialog(false);setForm(empty);await load()}catch(err){setSaveError(err instanceof Error?err.message:'No se pudo guardar')}finally{setSaving(false)}}
- return <Shell><div className="page-head"><div><div className="eyebrow">PANEL COMERCIAL <span className="eyebrow-line"/></div><h1>Buen día, equipo <span className="wave">✳</span></h1><p>Una vista clara de tus oportunidades y los próximos pasos para avanzar.</p></div><button className="btn btn-outline refresh" onClick={()=>void load()}><RefreshCw size={16}/> Actualizar</button></div>
- {error&&<div className="alert error">{error}<button onClick={()=>void load()}>Reintentar</button></div>}
- <div className="stat-grid"><Stat icon={<Users size={18}/>} label="Oportunidades activas" value={summary?String(summary.oportunidades_activas):'—'} bottom="En proceso comercial"/><Stat icon={<Wallet size={18}/>} label="Valor potencial" value={summary?money(summary.valor_potencial_usd):'—'} bottom="Oportunidades abiertas"/><Stat icon={<FileText size={18}/>} label="Cotizaciones pendientes" value={summary?String(summary.cotizaciones_pendientes):'—'} bottom="A la espera de avanzar"/><Stat icon={<CalendarClock size={18}/>} label="Sin seguimiento" value={summary?String(summary.sin_seguimiento):'—'} bottom="Requieren atención" accent/></div>
- <div className="split"><section className="panel action-panel"><div className="section-head"><div><div className="section-eyebrow">PRIORIZACIÓN</div><h2>Requieren tu atención</h2><p>Oportunidades con 7 días o más sin contacto.</p></div><span className="count-chip">{pending.length} pendientes</span></div><div className="action-list">{pending.slice(0,4).map(o=><Link className="action-item" key={o.id} href={`/oportunidades/${o.id}`}><span className="avatar">{o.cliente.slice(0,1)}</span><div><strong>{o.cliente}</strong><small>{o.dias_sin_contacto} días sin contacto · {estadoNombre[o.estado]}</small></div><ArrowUpRight size={17}/></Link>)}{!pending.length&&<p className="muted empty">{loading?'Cargando oportunidades...':'No hay seguimientos pendientes. ¡Todo al día!'}</p>}</div></section>
- <section className="panel insight-panel"><div className="insight-icon"><TrendingUp size={24}/></div><div className="section-eyebrow" style={{color:'#9ed9be'}}>TRABAJO MÁS INTELIGENTE</div><h2>Menos tareas repetitivas.<br/>Más tiempo para vender.</h2><p>Impulso centraliza oportunidades, destaca los seguimientos pendientes y organiza tus próximas acciones.</p><div className="insight-footer"><Sparkles size={16}/> Asistente con IA: próxima etapa <ArrowRight size={16}/></div></section></div>
- <section className="panel table-panel" id="oportunidades"><div className="section-head table-head"><div><div className="section-eyebrow">TU CARTERA</div><h2>Oportunidades comerciales</h2><p>Consultá, filtrá y gestioná cada conversación.</p></div><button className="btn btn-primary" onClick={()=>setDialog(true)}><Plus size={17}/> Nueva oportunidad</button></div><div className="table-toolbar"><label className="search"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar cliente, producto o contacto..." aria-label="Buscar oportunidades"/></label><select aria-label="Filtrar oportunidades" value={filter} onChange={e=>setFilter(e.target.value)}><option value="todas">Todos los estados</option><option value="pendientes">Necesitan seguimiento</option>{Object.keys(estadoNombre).map(k=><option key={k} value={k}>{estadoNombre[k as keyof typeof estadoNombre]}</option>)}</select></div><div className="table-scroll"><table><thead><tr><th>CLIENTE</th><th>PRODUCTO</th><th>ESTADO</th><th>VALOR POTENCIAL</th><th>ÚLTIMO CONTACTO</th><th></th></tr></thead><tbody>{shown.map(o=><tr key={o.id}><td><Link href={`/oportunidades/${o.id}`} className="table-client"><span className="small-avatar">{o.cliente.slice(0,1)}</span><span><strong>{o.cliente}</strong><small>{o.contacto}</small></span></Link></td><td>{o.producto}</td><td><span className={`status status-${o.estado}`}>{estadoNombre[o.estado]}</span>{o.seguimiento_pendiente&&<span className="overdue" title="Seguimiento pendiente"><AlertTriangle size={15}/></span>}</td><td className="value">{money(o.monto_estimado_usd)}</td><td className="muted">{dateAR(o.ultimo_contacto)}</td><td><Link href={`/oportunidades/${o.id}`} className="row-link" aria-label={`Ver ${o.cliente}`}><ArrowUpRight size={17}/></Link></td></tr>)}</tbody></table>{!shown.length&&<p className="empty muted">{loading?'Cargando datos...':'No encontramos oportunidades con esos filtros.'}</p>}</div><div className="table-foot">Mostrando {shown.length} de {items.length} oportunidades <span>Datos ficticios · Uso demostrativo</span></div></section>
- {dialog&&<div className="modal-backdrop" role="presentation" onMouseDown={()=>setDialog(false)}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title" onMouseDown={e=>e.stopPropagation()}><div className="modal-head"><div><div className="section-eyebrow">REGISTRO COMERCIAL</div><h2 id="dialog-title">Nueva oportunidad</h2></div><button className="icon-button" onClick={()=>setDialog(false)} aria-label="Cerrar"><X size={20}/></button></div><form onSubmit={e=>void submit(e)} className="fields"><label>Cliente<input required minLength={2} maxLength={120} value={form.cliente} onChange={e=>setForm({...form,cliente:e.target.value})} placeholder="Ej. Aurora Cosmética"/></label><label>Persona de contacto<input required minLength={2} maxLength={120} value={form.contacto} onChange={e=>setForm({...form,contacto:e.target.value})} placeholder="Nombre del contacto"/></label><label>Producto / servicio<input required minLength={2} maxLength={150} value={form.producto} onChange={e=>setForm({...form,producto:e.target.value})} placeholder="Producto de interés"/></label><div className="form-row"><label>Cantidad (opcional)<input type="number" min="1" value={form.cantidad} onChange={e=>setForm({...form,cantidad:e.target.value})}/></label><label>Valor estimado USD<input type="number" min="0" step="0.01" value={form.monto_estimado_usd} onChange={e=>setForm({...form,monto_estimado_usd:e.target.value})}/></label></div><label>Notas<textarea rows={3} maxLength={3000} value={form.notas} onChange={e=>setForm({...form,notas:e.target.value})} placeholder="Información importante de la consulta"/></label>{saveError&&<div className="alert error">{saveError}</div>}<button className="btn btn-primary full" disabled={saving}>{saving?'Guardando...':'Crear oportunidad'} <ArrowRight size={16}/></button></form></div></div>}
+ const shown=useMemo(()=>items.filter(o=>activos(o)).filter(o=>{
+   const term=search.trim().toLocaleLowerCase('es');
+   const searchMatch=[o.cliente,o.contacto,o.producto].some(x=>x.toLocaleLowerCase('es').includes(term));
+   const stateMatch=estado==='todas'||o.estado===estado;
+   const metricMatch=resumenFiltro==='todos'||
+      (resumenFiltro==='activos'&&activos(o))||
+      (resumenFiltro==='cotizaciones'&&o.estado==='cotizada')||
+      (resumenFiltro==='seguimiento'&&o.seguimiento_pendiente)||
+      (resumenFiltro==='valor'&&activos(o)&&o.monto_estimado_usd!=null);
+   return searchMatch&&stateMatch&&metricMatch;
+ }).sort((a,b)=>{
+  if(orden==='ultimo')return b.ultimo_contacto.localeCompare(a.ultimo_contacto)||b.id-a.id;
+  if(orden==='prioridad'){const pa=(a.seguimiento_pendiente?3:activos(a)?a.estado==='cotizada'?2:1:0),pb=(b.seguimiento_pendiente?3:activos(b)?b.estado==='cotizada'?2:1:0);return pb-pa||b.dias_sin_contacto-a.dias_sin_contacto||b.ultimo_contacto.localeCompare(a.ultimo_contacto)}
+  if(orden==='cliente_asc'||orden==='cliente_desc')return a.cliente.localeCompare(b.cliente,'es')*(orden==='cliente_asc'?1:-1);
+  const va=a.monto_estimado_usd??-1,vb=b.monto_estimado_usd??-1;
+  return orden==='valor_desc'?vb-va:va-vb;
+ }),[items,search,estado,resumenFiltro,orden]);
+ function selectMetric(value:ResumenFiltro){setResumenFiltro(current=>current===value?'todos':value);setEstado('todas');setTimeout(()=>document.querySelector('#contactos')?.scrollIntoView({behavior:'smooth',block:'start'}),0)}
+ async function submit(e:React.FormEvent){e.preventDefault();setSaving(true);setSaveError('');try{
+  await api('/api/opportunities',{method:'POST',body:JSON.stringify({cliente:form.cliente.trim(),contacto:form.contacto.trim(),producto:form.producto.trim(),cantidad:form.cantidad?Number(form.cantidad):null,monto_estimado_usd:form.monto_estimado_usd?Number(form.monto_estimado_usd):null,notas:form.notas})});
+  setDialog(false);setForm(empty);await load();
+ }catch(err){setSaveError(err instanceof Error?err.message:'No se pudo guardar')}finally{setSaving(false)}}
+ const metrics:[ResumenFiltro,string,string][]=[
+  ['activos','Contactos comerciales activos',summary?String(summary.oportunidades_activas):'—'],
+  ['cotizaciones','Cotizaciones pendientes',summary?String(summary.cotizaciones_pendientes):'—'],
+  ['seguimiento','Contactos sin seguimiento',summary?String(summary.sin_seguimiento):'—'],
+  ['valor','Valor potencial estimado',summary?money(summary.valor_potencial_usd):'—']
+ ];
+ return <Shell>
+  <div className="page-head simple-head"><h1>Contactos comerciales</h1><button className="btn btn-outline" onClick={()=>void load()}><RefreshCw size={16}/> Actualizar</button></div>
+  {error&&<div className="alert error" role="alert">{error}<button onClick={()=>void load()}>Reintentar</button></div>}
+  <section className="panel resume-table" aria-labelledby="sales-title"><div className="resume-heading"><h2 id="sales-title">Resumen de ventas</h2><small>Actualizado hoy</small></div>
+   <div className="resume-rows">{metrics.map(([key,label,value])=><button type="button" key={key} className={`resume-row ${resumenFiltro===key?'is-active':''}`} onClick={()=>selectMetric(key)} aria-pressed={resumenFiltro===key} title={`Filtrar por ${label.toLowerCase()}`}><span>{label}</span><strong>{value}</strong></button>)}</div>
+  </section>
+  <section className="panel table-panel compact-contact-table" id="contactos"><div className="section-head table-head"><h2>Contactos comerciales</h2><button className="btn btn-primary" onClick={()=>setDialog(true)}><Plus size={16}/> Nuevo contacto</button></div>
+   <div className="table-toolbar compact-toolbar"><label className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar cliente, producto o contacto" aria-label="Buscar contactos"/></label>
+    <select value={estado} aria-label="Filtrar por estado" onChange={e=>setEstado(e.target.value)}><option value="todas">Todos los estados</option>{Object.entries(estadoNombre).filter(([key])=>!['ganada','perdida'].includes(key)).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>
+             <select value={orden} aria-label="Ordenar contactos" onChange={e => setOrden(e.target.value as Orden)}><option value="ultimo">Último contacto (más reciente)</option><option value="prioridad">Prioridad de seguimiento</option><option value="cliente_asc">Cliente (A–Z)</option><option value="cliente_desc">Cliente (Z–A)</option><option value="valor_desc">Valor (mayor a menor)</option><option value="valor_asc">Valor (menor a mayor)</option></select>
+    {resumenFiltro!=='todos'&&<button type="button" className="btn btn-outline clear-filter" onClick={()=>setResumenFiltro('todos')}><X size={14}/> Quitar filtro</button>}
+   </div>
+   <div className="table-scroll"><table><thead><tr><th>CLIENTE</th><th>PRODUCTO</th><th>ESTADO</th><th>VALOR ESTIMADO</th><th>ÚLTIMO CONTACTO</th><th></th></tr></thead><tbody>{shown.map(o=><tr key={o.id}><td data-label="Cliente"><Link className="table-client" href={`/oportunidades/${o.id}`}><span><strong>{o.cliente}</strong><small>{o.contacto}</small></span></Link></td><td data-label="Producto">{o.producto}</td><td data-label="Estado"><span className={`status status-${o.estado}`}>{estadoNombre[o.estado]}</span></td><td data-label="Valor estimado" className="value">{money(o.monto_estimado_usd)}</td><td data-label="Último contacto">{dateAR(o.ultimo_contacto)}</td><td><Link href={`/oportunidades/${o.id}`} className="row-link" aria-label={`Abrir ${o.cliente}`}><ArrowUpRight size={16}/></Link></td></tr>)}</tbody></table>
+   {!shown.length&&<p className="empty muted">{loading?'Cargando datos...':'No hay contactos con los filtros seleccionados.'}</p>}</div>
+   <div className="table-foot">{shown.length} de {items.filter(activos).length} contactos activos</div>
+  </section>
+  {dialog&&<div className="modal-backdrop" role="presentation" onMouseDown={()=>setDialog(false)}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title" onMouseDown={e=>e.stopPropagation()}><div className="modal-head"><h2 id="dialog-title">Nuevo contacto comercial</h2><button className="icon-button" onClick={()=>setDialog(false)} aria-label="Cerrar"><X size={20}/></button></div><form className="fields" onSubmit={e=>void submit(e)}><label>Cliente<input required minLength={2} maxLength={120} value={form.cliente} onChange={e=>setForm({...form,cliente:e.target.value})}/></label><label>Persona de contacto<input required minLength={2} maxLength={120} value={form.contacto} onChange={e=>setForm({...form,contacto:e.target.value})}/></label><label>Producto o servicio<input required minLength={2} maxLength={150} value={form.producto} onChange={e=>setForm({...form,producto:e.target.value})}/></label><div className="form-row"><label>Cantidad<input type="number" min="1" value={form.cantidad} onChange={e=>setForm({...form,cantidad:e.target.value})}/></label><label>Valor estimado USD<input type="number" min="0" step="0.01" value={form.monto_estimado_usd} onChange={e=>setForm({...form,monto_estimado_usd:e.target.value})}/></label></div><label>Notas<textarea rows={3} value={form.notas} onChange={e=>setForm({...form,notas:e.target.value})}/></label>{saveError&&<div className="alert error" role="alert">{saveError}</div>}<button className="btn btn-primary full" disabled={saving}>{saving?'Guardando...':'Guardar contacto'}</button></form></div></div>}
  </Shell>;
 }
-function Stat({icon,label,value,bottom,accent}:{icon:React.ReactNode;label:string;value:string;bottom:string;accent?:boolean}){return <div className={'stat '+(accent?'stat-accent':'')}><div className="stat-top"><span>{label}</span><div className="stat-icon">{icon}</div></div><strong>{value}</strong><small>{bottom}</small></div>}
