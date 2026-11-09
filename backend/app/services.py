@@ -9,8 +9,12 @@ def to_opportunity(row: Row, today: date) -> dict:
     last = date.fromisoformat(row["ultimo_contacto"])
     days = max(0, (today - last).days)
     active = row["estado"] not in CERRADAS
-    pending = active and days >= DIAS_SEGUIMIENTO
-    if pending and row["estado"] == "cotizada":
+    due = date.fromisoformat(row['fecha_seguimiento']) if row['fecha_seguimiento'] else None
+    # La fecha programada tiene prioridad sobre el aviso automático de 7 días.
+    pending = active and (due <= today if due is not None else days >= DIAS_SEGUIMIENTO)
+    if pending and due is not None:
+        action = row['motivo_seguimiento'] or 'Realizar seguimiento programado'
+    elif pending and row["estado"] == "cotizada":
         action = "Retomar contacto por cotización sin respuesta"
     elif pending:
         action = "Contactar al cliente para actualizar la oportunidad"
@@ -24,6 +28,10 @@ def to_opportunity(row: Row, today: date) -> dict:
         "monto_estimado_usd": row["monto_estimado_usd"], "estado": row["estado"],
         "creada_el": row["creada_el"], "ultimo_contacto": row["ultimo_contacto"],
         "dias_sin_contacto": days, "seguimiento_pendiente": pending, "proxima_accion": action,
+        "tipo_consulta": row['tipo_consulta'], "canal_origen": row['canal_origen'],
+        "presentacion": row['presentacion'], "packaging": row['packaging'],
+        "responsable": row['responsable'],
+        "fecha_seguimiento": row['fecha_seguimiento'], "motivo_seguimiento": row['motivo_seguimiento'],
     }
 
 def metrics(items: list[dict], today: date) -> dict:

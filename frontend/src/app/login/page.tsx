@@ -3,6 +3,7 @@ import {useState, type FormEvent} from 'react';
 import {useRouter} from 'next/navigation';
 import {Eye,EyeOff,AlertCircle,PanelLeftClose} from 'lucide-react';
 import './login.css';
+import ThemeToggle from '@/components/theme-toggle';
 
 export default function Login(){
  const router=useRouter();
@@ -33,7 +34,7 @@ export default function Login(){
   }catch{setError('No se pudo conectar con el servidor')}
   finally{setBusy(false)}
  }
- return <main className="login-screen"><form className="login-panel" onSubmit={signIn}>
+ return <main className="login-screen"><div className="login-theme-control"><ThemeToggle/></div><form className="login-panel" onSubmit={signIn}>
   <div className="login-brand"><span className="login-mark"><PanelLeftClose size={21} aria-hidden="true"/></span><span><strong>Impulso</strong><small>Gestión comercial</small></span></div>
   <div className="login-heading"><h1>Iniciar sesión</h1></div>
   <label htmlFor="usuario">Usuario</label>

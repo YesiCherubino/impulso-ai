@@ -1,0 +1,133 @@
+/* Impulso · Industrial moderno. Sistema claro/oscuro persistente.
+   Todos los colores oscuros se mantienen neutros: el color marca estados, no decoración. */
+:root{color-scheme:light}
+html[data-theme="dark"]{color-scheme:dark}
+.theme-toggle{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:37px;padding:0 10px;border:1px solid #cedce3;border-radius:5px;background:#fff;color:#30556a;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer}
+.theme-toggle:hover{background:#edf3f6}
+.theme-toggle:focus-visible,.office-app :is(a,button,input,select,textarea):focus-visible,.login-screen :is(button,input):focus-visible{outline:2px solid #51a5c3;outline-offset:2px}
+@media(max-width:670px){.theme-toggle{width:39px;min-width:39px;padding:0}.theme-toggle-label{display:none}}
+.commercial-subtype{display:block;font-size:11px;color:#788b95;line-height:1.35;margin-top:4px;white-space:normal}.commercial-subtype.is-overdue{color:#b36b28}
+.office-app .commercial-edit-panel{padding:23px;margin:0 0 18px}
+.office-app .commercial-edit-fields{margin-top:20px;gap:14px}
+.commercial-form-actions,.scheduled-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.commercial-form-actions .btn,.scheduled-actions .btn{margin-top:0}
+.form-feedback{font-size:12px;color:#396f6d;line-height:1.45}
+.office-app .scheduled-follow-up{margin:16px 0 20px;padding:16px 0;border-top:1px solid #dfe7eb;border-bottom:1px solid #dfe7eb;gap:13px}
+.office-app .scheduled-follow-up .btn{min-height:38px;white-space:normal;flex:1 1 140px;padding:10px}
+.office-app .bo-contact-form select,.office-app .new-consultation-form select{width:100%;height:38px;padding:7px 9px;border-radius:4px;border:1px solid #cad9e1;background:#fff;color:#243c4b;min-width:0}
+.office-app .new-consultation-form{display:grid;gap:12px}
+.office-app .new-consultation-form>label{display:grid;gap:6px;font-size:12px;color:#4b6978}
+.office-app .new-consultation-form>label textarea{width:100%;background:#fff;border:1px solid #cad9e1;border-radius:4px;padding:10px;line-height:1.5}
+@media(max-width:680px){.office-app .commercial-edit-panel{padding:16px}.commercial-form-actions{align-items:stretch}.commercial-form-actions .btn{flex:1 1 100%}}
+
+/* Paleta nocturna gris-azulada: fondos mate y contraste pensado para tareas prolongadas. */
+html[data-theme="dark"] body{background:#131d25;color:#e6edf1}
+html[data-theme="dark"] .office-app{
+ --pine:#50849d;--pine-dark:#172b38;--mint:#273c4a;--ink:#e6edf1;--muted:#a5b6c1;--surface:#131d25;--border:#344754;--white:#202e39;
+ --dark-panel:#1d2a35;--dark-raised:#233541;--dark-soft:#192732;--dark-line:#354754;--dark-text:#e7eef2;--dark-subtle:#b2c0c9;
+ background:var(--surface);color:var(--dark-text)
+}
+html[data-theme="dark"] .office-app .sidebar,
+html[data-theme="dark"] .office-app .sidebar.sidebar-open,
+html[data-theme="dark"] .office-app .topbar{background:#192733;border-color:#344653;color:#e4edf2}
+html[data-theme="dark"] .office-app .office-sidebar-footer,
+html[data-theme="dark"] .office-app .office-guide-link{border-color:#344653}
+html[data-theme="dark"] .office-app .brand strong,
+html[data-theme="dark"] .office-app .brand small,
+html[data-theme="dark"] .office-app .office-user-button,
+html[data-theme="dark"] .office-app .office-guide-link,
+html[data-theme="dark"] .office-app .top-label,
+html[data-theme="dark"] .office-app .top-label span{color:#d4e1e8}
+html[data-theme="dark"] .office-app .side-group-label,
+html[data-theme="dark"] .office-app .office-user-heading{color:#a4b5c0}
+html[data-theme="dark"] .office-app .side-nav a{color:#b6c7d0}
+html[data-theme="dark"] .office-app .side-nav a.active{background:#2a4555;color:#e8f4fa}
+html[data-theme="dark"] .office-app .side-nav a:hover{background:#293d49;color:#ecf4f7}
+html[data-theme="dark"] .office-app .office-user-avatar,
+html[data-theme="dark"] .office-app .avatar,
+html[data-theme="dark"] .office-app .small-avatar{background:#294453;color:#d3e6f0}
+html[data-theme="dark"] .office-app .brand-icon{background:#315f76;color:#fff}
+html[data-theme="dark"] .office-app .content{color:var(--dark-text)}
+html[data-theme="dark"] .office-app :is(.panel,.stat,.report-metrics>div,.office-integrations-list,.office-integration,.office-connection-plan,.modal){background:var(--dark-panel);border-color:var(--dark-line);color:var(--dark-text)}
+html[data-theme="dark"] .office-app .bo-list,
+html[data-theme="dark"] .office-app .bo-detail{background:var(--dark-panel);border-color:var(--dark-line)}
+html[data-theme="dark"] .office-app .bo-row,
+html[data-theme="dark"] .office-app .notification-item,
+html[data-theme="dark"] .office-app .notification-item.is-read,
+html[data-theme="dark"] .office-app .resume-row{background:var(--dark-panel);color:var(--dark-text);border-color:var(--dark-line)}
+html[data-theme="dark"] .office-app :is(.bo-row:hover,.bo-row.is-selected,.notification-item:hover,.resume-row:hover){background:#293c48}
+html[data-theme="dark"] .office-app .bo-row.is-selected{box-shadow:inset 3px 0 #65a7c2}
+html[data-theme="dark"] .office-app .resume-row.is-active{background:#294653;color:#e2f3fb;box-shadow:inset 3px 0 #77b1cc}
+html[data-theme="dark"] .office-app .bo-row-avatar{background:#304755;color:#e4f2fa}
+html[data-theme="dark"] .office-app :is(.bo-conversation,.bo-data-grid>div,.bo-contact-summary,.bo-contact-form,.bo-banner,.office-notice,.suggestion,.fact,.notes-block){background:var(--dark-soft);border-color:var(--dark-line);color:var(--dark-text)}
+html[data-theme="dark"] .office-app .bo-bubble{background:#243844;border-color:#415665;color:#e6edf1}
+html[data-theme="dark"] .office-app :is(.bo-detail-head,.bo-conversation,.bo-operation-section,.bo-filters,.bo-ai-result,.bo-contact-form,.bo-draft,.scheduled-follow-up,.timeline-item,.report-pending-row,.resume-row){border-color:var(--dark-line)}
+html[data-theme="dark"] .office-app :is(h1,h2,h3,.page-head h1,.bo-head h1,.section-head h2,.attention-card h2,.bo-person h2,.bo-operation-header h3,.table-client strong,.action-item strong,.fact strong,.stat strong,.office-page-title h1,.office-integration-header h2,.report-metrics strong,.bo-empty-detail strong){color:#e9f0f3}
+html[data-theme="dark"] .office-app :is(.bo-row-top strong,.bo-contact-summary strong,.bo-data-grid strong,.table-client,.resume-row strong,.timeline-title strong){color:#e7eef2}
+html[data-theme="dark"] .office-app :is(p,small,.muted,.page-head p,.bo-head p,.section-head p,.bo-row-person,.bo-row-preview,.bo-row-top small,.bo-data-grid small,.bo-time,.bo-hint,.bo-missing,.bo-draft small,.bo-contact-summary p,.bo-empty,.bo-empty-detail,.office-integration-main p,.office-integration-main small,.office-connection-plan p,.office-connection-plan li,.report-metrics span,.report-pending-row p,.resume-heading small,.form-hint,.commercial-subtype,.table-foot,.table-client small,.stat small,.fact small,.notes-block p,.timeline time,.notification-item-body small){color:#adbec8}
+html[data-theme="dark"] .office-app .eyebrow,
+html[data-theme="dark"] .office-app .section-eyebrow,
+html[data-theme="dark"] .office-app .bo-breadcrumb{color:#96b9cb}
+html[data-theme="dark"] .office-app .commercial-subtype.is-overdue{color:#ffd09a}
+html[data-theme="dark"] .office-app :is(input:not([type="checkbox"]),textarea,select){background:#1c2b36!important;border-color:#455967!important;color:#e7eff3!important;box-shadow:none}
+html[data-theme="dark"] .office-app :is(input,textarea)::placeholder{color:#9caeb9;opacity:1}
+html[data-theme="dark"] .office-app :is(.bo-search,.search){background:#1c2b36;border-color:#455967;color:#aebfc9}
+html[data-theme="dark"] .office-app :is(.bo-search input,.search input){background:transparent!important;border:0!important}
+html[data-theme="dark"] .office-app :is(.fields label,.bo-contact-form label,.new-consultation-form>label){color:#c4d2dc}
+html[data-theme="dark"] .office-app :is(.btn-primary,.login-submit){background:#3c778f;color:#fff;border-color:#3c778f}
+html[data-theme="dark"] .office-app .btn-primary:hover{background:#4687a2}
+html[data-theme="dark"] .office-app :is(.btn-outline,.btn-quiet,.bo-filter-tab,.notification-trigger,.mobile-nav-toggle,.icon-button){background:#263a47;color:#d6e8f1;border-color:#4a5c6a}
+html[data-theme="dark"] .office-app :is(.btn-outline,.btn-quiet,.bo-filter-tab,.notification-trigger,.mobile-nav-toggle):hover{background:#304856;color:#f0f7fb}
+html[data-theme="dark"] .office-app :is(.bo-filters button,.bo-filter-select select){color:#c7d5dd}
+html[data-theme="dark"] .office-app .bo-filters .bo-filter-tab.selected{background:#325363;color:#e8f3f9;border-color:#5e91a8}
+html[data-theme="dark"] .office-app .bo-state{background:#31414a;color:#d2dce3}
+html[data-theme="dark"] .office-app :is(.bo-state-nueva,.status-nueva){background:#4d3c2c;color:#ffd39d}
+html[data-theme="dark"] .office-app :is(.bo-state-en_gestion,.status-contactada,.status-cotizada){background:#29485d;color:#c5e3fa}
+html[data-theme="dark"] .office-app :is(.bo-state-resuelta,.status-ganada){background:#294d40;color:#b8edd5}
+html[data-theme="dark"] .office-app .status-negociacion{background:#53422d;color:#ffdca6}
+html[data-theme="dark"] .office-app .status-perdida{background:#553639;color:#ffc0c4}
+html[data-theme="dark"] .office-app .status{border:1px solid #ffffff15}
+html[data-theme="dark"] .office-app .attention-icon{background:#2c4654;color:#d4eaf5}
+html[data-theme="dark"] .office-app :is(.bo-saved-indicator,.count-chip,.office-planned){background:#2b4150;color:#bed8e6}
+html[data-theme="dark"] .office-app :is(.alert.error,.login-error){background:#4a3035;color:#ffd4d2;border-color:#80525b}
+html[data-theme="dark"] .office-app table th{background:#263845;border-color:var(--dark-line);color:#bfd0d9}
+html[data-theme="dark"] .office-app table td{border-color:var(--dark-line);color:#c2d1da}
+html[data-theme="dark"] .office-app table tr:hover td{background:#283a46}
+html[data-theme="dark"] .office-app .table-client strong{color:#e4edf3}
+html[data-theme="dark"] .office-app .value{color:#d5eaf1}
+html[data-theme="dark"] .office-app .notification-popover{background:#1d2b36;border-color:#455967;box-shadow:0 18px 38px #0006;color:#e8eff3}
+html[data-theme="dark"] .office-app .notification-heading{border-color:var(--dark-line);color:#e8f1f5}
+html[data-theme="dark"] .office-app .notification-heading button{color:#bed1db}
+html[data-theme="dark"] .office-app .notification-item-body strong{color:#e8f0f3}
+html[data-theme="dark"] .office-app .notification-unread{background:#7fc4e0}
+html[data-theme="dark"] .office-app .modal-backdrop{background:#05090ed9}
+html[data-theme="dark"] .office-app .modal{box-shadow:0 22px 80px #0008}
+html[data-theme="dark"] .office-app .form-feedback{color:#9ed8cb}
+html[data-theme="dark"] .office-app .bo-filters{border-color:var(--dark-line)}
+html[data-theme="dark"] .office-app .office-integration-logo{background:#2e4756;border-color:#496373;color:#c1e1f0}
+html[data-theme="dark"] .office-app .report-pending-row{border-color:var(--dark-line)}
+html[data-theme="dark"] .office-app .table-toolbar select{background:#1c2b36;color:#e7eff3}
+html[data-theme="dark"] .office-app .bo-contact-form select{background:#1c2b36;color:#e7eff3}
+html[data-theme="dark"] .office-app .topbar-actions .theme-toggle{background:#273b49;border-color:#466171;color:#d5edf7}
+html[data-theme="dark"] .office-app .topbar-actions .theme-toggle:hover{background:#345466}
+html[data-theme="dark"] .office-app .report-pending a{color:#b3d8e9}
+html[data-theme="dark"] .office-app .bo-back{color:#a6d5eb}
+
+/* Pantalla de acceso: el tema también se puede cambiar antes de iniciar sesión. */
+.login-theme-control{position:absolute;top:20px;right:24px}
+html[data-theme="dark"] .login-screen{background:#131d25;color:#e6edf1}
+html[data-theme="dark"] .login-panel{background:#1e2c37;border-color:#3a4e5b;box-shadow:0 12px 50px #0003}
+html[data-theme="dark"] .login-brand{border-color:#394c59}
+html[data-theme="dark"] .login-brand strong,
+html[data-theme="dark"] .login-panel h1,
+html[data-theme="dark"] .login-panel label{color:#e8f0f4}
+html[data-theme="dark"] .login-brand small{color:#a6b8c3}
+html[data-theme="dark"] .login-panel input{background:#192833;color:#e8f0f4;border-color:#475d6c}
+html[data-theme="dark"] .login-panel input:focus-visible{outline-color:#61a6c2}
+html[data-theme="dark"] .login-panel .password-toggle{color:#b6c9d4}
+html[data-theme="dark"] .login-panel .password-toggle:hover{background:#2d4452}
+html[data-theme="dark"] .login-panel .login-submit{background:#397991;color:#fff}
+html[data-theme="dark"] .login-panel .login-error{background:#4d3035;color:#ffd7d7;border-color:#80555a}
+html[data-theme="dark"] .login-screen .theme-toggle{background:#233845;border-color:#496271;color:#e6f2f8}
+html[data-theme="dark"] .login-screen .theme-toggle:hover{background:#2e4b5c}
+@media(max-width:480px){.login-theme-control{top:12px;right:14px}}

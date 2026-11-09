@@ -12,7 +12,8 @@ from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import connect, init_db
-from .schemas import Estado, NuevaInteraccion, NuevaOportunidad, Oportunidad, OportunidadDetalle, Resumen
+from .schemas import (Estado, NuevaInteraccion, NuevaOportunidad, EditarDatosComerciales,
+                      ProgramarSeguimiento, CanalOrigen, Oportunidad, OportunidadDetalle, Resumen)
 from pydantic import BaseModel, Field
 from .services import metrics, to_opportunity
 
@@ -118,7 +119,9 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
     def management_summary():
         items = all_items()
         pending = sorted((i for i in items if i['seguimiento_pendiente']),
-                         key=lambda i: i['dias_sin_contacto'], reverse=True)
+                         key=lambda i: (i['fecha_seguimiento'] is None,
+                                        i['fecha_seguimiento'] or '',
+                                        -i['dias_sin_contacto']))
         active = [i for i in items if i['estado'] not in ('ganada', 'perdida')]
         return {
             'titulo': 'Resumen comercial del día',
@@ -127,10 +130,11 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
             'prioridades': [
                 {'id': i['id'], 'cliente': i['cliente'],
                  'dias_sin_contacto': i['dias_sin_contacto'],
+                 'fecha_seguimiento': i['fecha_seguimiento'],
                  'accion': i['proxima_accion'] or 'Revisar oportunidad'}
                 for i in pending[:5]
             ],
-            'criterio': 'Ordenado por días sin contacto. Son reglas de negocio, no predicciones de IA.',
+            'criterio': 'Primero seguimientos programados vencidos, luego días sin contacto. Son reglas de negocio, no predicciones de IA.',
         }
 
     def current_user_id(request: Request) -> int:
@@ -152,22 +156,32 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
                     (f"mensaje:{row['id']}", 'mensaje', row['id'],
                      f"Nueva consulta · {row['cliente']}", row['texto'][:160], row['recibido_el']))
             con.execute("UPDATE notificaciones SET activa=0 WHERE tipo='seguimiento'")
-            for row in con.execute('''SELECT id, cliente, ultimo_contacto FROM oportunidades
+            for row in con.execute('''SELECT id, cliente, ultimo_contacto, fecha_seguimiento, motivo_seguimiento FROM oportunidades
                  WHERE estado NOT IN ('ganada','perdida')''').fetchall():
                 try:
                     days = (date.today() - date.fromisoformat(row['ultimo_contacto'])).days
+                    due = date.fromisoformat(row['fecha_seguimiento']) if row['fecha_seguimiento'] else None
                 except ValueError:
                     continue
-                if days <= 7:
-                    continue
-                key = f"seguimiento:{row['id']}:{row['ultimo_contacto']}"
+                if due is not None:
+                    if due > date.today():
+                        continue
+                    detalle = f"Programado para {due.strftime('%d/%m/%Y')}"
+                    if row['motivo_seguimiento']:
+                        detalle += f" · {row['motivo_seguimiento']}"
+                    key = f"seguimiento:{row['id']}:{due.isoformat()}"
+                else:
+                    if days < 7:
+                        continue
+                    detalle = f'{days} días sin contacto'
+                    key = f"seguimiento:{row['id']}:{row['ultimo_contacto']}"
                 con.execute('''INSERT OR IGNORE INTO notificaciones
                      (clave,tipo,referencia_id,titulo,detalle,creada_en,activa)
                      VALUES (?,?,?,?,?,?,1)''',
                      (key, 'seguimiento', row['id'], f"Seguimiento · {row['cliente']}",
-                      f'{days} días sin contacto', stamp))
+                      detalle, stamp))
                 con.execute('UPDATE notificaciones SET activa=1, detalle=? WHERE clave=?',
-                            (f'{days} días sin contacto', key))
+                            (detalle, key))
 
     @app.get('/api/notifications')
     def notifications(request: Request):
@@ -197,6 +211,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
         cliente: str = Field(min_length=2, max_length=120)
         contacto: str = Field(min_length=2, max_length=120)
         texto: str = Field(min_length=5, max_length=5000)
+        canal: CanalOrigen = 'Manual'
 
     @app.post('/api/inbox', status_code=201, dependencies=[Depends(require_access)])
     def add_inbox_message(payload: NuevaConsulta):
@@ -204,7 +219,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
         with connect(db_path) as con:
             cur = con.execute('''INSERT INTO bandeja_consultas
               (cliente,contacto,canal,texto,recibido_el,estado) VALUES (?,?,?,?,?,'nueva')''',
-              (payload.cliente.strip(),payload.contacto.strip(),'Manual',payload.texto.strip(),received))
+              (payload.cliente.strip(),payload.contacto.strip(),payload.canal,payload.texto.strip(),received))
             row = con.execute('SELECT * FROM bandeja_consultas WHERE id=?',(cur.lastrowid,)).fetchone()
         sync_notifications()
         return dict(row)
@@ -323,14 +338,45 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
         today = date.today().isoformat()
         with connect(db_path) as con:
             cur = con.execute("""INSERT INTO oportunidades
-                  (cliente, contacto, producto, cantidad, monto_estimado_usd, estado, creada_el, ultimo_contacto, notas)
-                  VALUES (?, ?, ?, ?, ?, 'nueva', ?, ?, ?)""",
+                  (cliente, contacto, producto, cantidad, monto_estimado_usd, estado, creada_el, ultimo_contacto, notas,
+                   tipo_consulta, canal_origen, presentacion, packaging, responsable)
+                  VALUES (?, ?, ?, ?, ?, 'nueva', ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (payload.cliente, payload.contacto, payload.producto, payload.cantidad,
-                 payload.monto_estimado_usd, today, today, payload.notas))
+                 payload.monto_estimado_usd, today, today, payload.notas, payload.tipo_consulta,
+                 payload.canal_origen, payload.presentacion, payload.packaging, payload.responsable))
             con.execute("INSERT INTO interacciones (oportunidad_id, tipo, descripcion, fecha) VALUES (?, 'consulta', ?, ?)",
                         (cur.lastrowid, "Oportunidad creada manualmente", today))
             new_id = cur.lastrowid
         return get_opportunity(new_id)
+
+    @app.post('/api/opportunities/{opportunity_id}/commercial-details', response_model=OportunidadDetalle,
+              dependencies=[Depends(require_access)])
+    def edit_commercial_details(opportunity_id: int, payload: EditarDatosComerciales):
+        get_opportunity(opportunity_id)
+        with connect(db_path) as con:
+            con.execute('''UPDATE oportunidades SET tipo_consulta=?, canal_origen=?, presentacion=?,
+                packaging=?, responsable=? WHERE id=?''',
+                (payload.tipo_consulta, payload.canal_origen, payload.presentacion.strip(),
+                 payload.packaging.strip(), payload.responsable.strip(), opportunity_id))
+        return get_opportunity(opportunity_id)
+
+    @app.post('/api/opportunities/{opportunity_id}/follow-up', response_model=OportunidadDetalle,
+              dependencies=[Depends(require_access)])
+    def schedule_follow_up(opportunity_id: int, payload: ProgramarSeguimiento):
+        get_opportunity(opportunity_id)
+        due = payload.fecha_seguimiento.isoformat() if payload.fecha_seguimiento else None
+        reason = payload.motivo_seguimiento.strip() if due else ''
+        with connect(db_path) as con:
+            previous = con.execute('''SELECT fecha_seguimiento, motivo_seguimiento FROM oportunidades WHERE id=?''',
+                                   (opportunity_id,)).fetchone()
+            if previous['fecha_seguimiento'] != due or previous['motivo_seguimiento'] != reason:
+                con.execute('''UPDATE oportunidades SET fecha_seguimiento=?, motivo_seguimiento=? WHERE id=?''',
+                            (due, reason, opportunity_id))
+                description = (f'Seguimiento programado para {due}: {reason or "Sin motivo indicado"}'
+                               if due else 'Se eliminó la fecha de seguimiento programada')
+                con.execute('''INSERT INTO interacciones (oportunidad_id,tipo,descripcion,fecha)
+                    VALUES (?,'nota',?,?)''', (opportunity_id, description, date.today().isoformat()))
+        return get_opportunity(opportunity_id)
 
     class CambiarEstadoComercial(BaseModel):
         estado: Estado
@@ -373,9 +419,15 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
             con.execute("INSERT INTO interacciones (oportunidad_id, tipo, descripcion, fecha) VALUES (?, ?, ?, ?)",
                         (opportunity_id, payload.tipo, payload.descripcion, interaction_date.isoformat()))
             previous = date.fromisoformat(row["ultimo_contacto"])
-            if payload.tipo in ("correo", "llamada", "reunion") and interaction_date > previous:
-                con.execute("UPDATE oportunidades SET ultimo_contacto = ? WHERE id = ?",
-                            (interaction_date.isoformat(), opportunity_id))
+            if payload.tipo in ("correo", "llamada", "reunion"):
+                if interaction_date > previous:
+                    con.execute("UPDATE oportunidades SET ultimo_contacto = ? WHERE id = ?",
+                                (interaction_date.isoformat(), opportunity_id))
+                # Un contacto realizado en la fecha acordada cumple el recordatorio.
+                planned = con.execute('SELECT fecha_seguimiento FROM oportunidades WHERE id=?', (opportunity_id,)).fetchone()
+                if planned['fecha_seguimiento'] and interaction_date >= date.fromisoformat(planned['fecha_seguimiento']):
+                    con.execute("UPDATE oportunidades SET fecha_seguimiento=NULL, motivo_seguimiento='' WHERE id=?",
+                                (opportunity_id,))
         return get_opportunity(opportunity_id)
 
     # El servicio se inyecta para permitir tests offline y para evitar llamadas reales en CI.

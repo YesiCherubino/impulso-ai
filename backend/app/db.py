@@ -14,7 +14,14 @@ CREATE TABLE IF NOT EXISTS oportunidades (
  estado TEXT NOT NULL,
  creada_el TEXT NOT NULL,
  ultimo_contacto TEXT NOT NULL,
- notas TEXT NOT NULL DEFAULT ''
+ notas TEXT NOT NULL DEFAULT '',
+ tipo_consulta TEXT NOT NULL DEFAULT 'sin_clasificar',
+ canal_origen TEXT NOT NULL DEFAULT 'Manual',
+ presentacion TEXT NOT NULL DEFAULT '',
+ packaging TEXT NOT NULL DEFAULT '',
+ responsable TEXT NOT NULL DEFAULT '',
+ fecha_seguimiento TEXT,
+ motivo_seguimiento TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS interacciones (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,6 +120,20 @@ def init_db(db_path: Path) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with connect(db_path) as con:
         con.executescript(SCHEMA)
+        # Migración aditiva para bases existentes: no elimina ningún dato.
+        columns = {row['name'] for row in con.execute('PRAGMA table_info(oportunidades)')}
+        additions = {
+            'tipo_consulta': "TEXT NOT NULL DEFAULT 'sin_clasificar'",
+            'canal_origen': "TEXT NOT NULL DEFAULT 'Manual'",
+            'presentacion': "TEXT NOT NULL DEFAULT ''",
+            'packaging': "TEXT NOT NULL DEFAULT ''",
+            'responsable': "TEXT NOT NULL DEFAULT ''",
+            'fecha_seguimiento': 'TEXT',
+            'motivo_seguimiento': "TEXT NOT NULL DEFAULT ''",
+        }
+        for column, definition in additions.items():
+            if column not in columns:
+                con.execute(f'ALTER TABLE oportunidades ADD COLUMN {column} {definition}')
         # Se agregan mensajes ficticios también a bases SQLite existentes.
         if not con.execute("SELECT COUNT(*) FROM bandeja_consultas").fetchone()[0]:
             from datetime import datetime, timezone
