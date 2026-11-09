@@ -58,3 +58,12 @@ html[data-theme='dark'] .v2-office .v3-chat-message{background:#2b343a;border-co
 html[data-theme='dark'] .v2-office :is(.v3-thread-casebar,.v3-bubble,.v3-original,.v3-board-column,.v3-day){background:#1d252a;border-color:#39454b;color:var(--v3-ink)}
 @media(max-width:760px){.v3-data-grid,.v3-fields{grid-template-columns:1fr}.v3-inbox-filters{align-items:stretch}.v3-chat-scroll,.v3-dialog-body{padding:15px}.v3-thread-header,.v3-dialog-head{padding:15px}.v3-thread-casebar{margin:0 15px}.v3-thread-work{padding:15px}.v3-board{grid-template-columns:repeat(2,minmax(240px,1fr))}.v3-chat-message{max-width:97%}.v3-calendar-grid{overflow:auto}}
 .v3-admin-tabs{display:inline-flex;margin-bottom:18px}.v3-user-list{margin-top:12px}.v3-user-row{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--v3-border);color:var(--v3-ink);flex-wrap:wrap}.v3-user-avatar{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;border:1px solid var(--v3-border);color:var(--v3-muted)}.v3-user-data{display:grid;gap:4px;flex:1;min-width:140px}.v3-user-data small{color:var(--v3-muted)}.v3-user-row select{min-width:145px}.v3-config-check{display:flex!important;flex-direction:row!important;align-items:center;gap:10px}.v3-config-check input{min-height:unset;width:16px;height:16px;accent-color:#76958b}
+
+/* Ficha comercial: estado editable en el encabezado, sin panel ni botón extra. */
+.v2-office .v3-contact-heading{align-items:flex-start;gap:20px;flex-wrap:wrap}
+.v2-office .v3-contact-status{display:grid;gap:6px;min-width:180px;max-width:220px;margin-left:auto;align-self:center}
+.v2-office .v3-contact-status label{font-size:12px;font-weight:600;color:var(--v3-muted)}
+.v2-office .v3-contact-status select{width:100%;min-height:40px;padding:9px 35px 9px 12px;font-weight:600}
+.v2-office .v3-contact-status small{font-size:11px;color:var(--v3-muted)}
+.v2-office .v3-contact-status .status{width:max-content}
+@media(max-width:560px){.v2-office .v3-contact-status{width:100%;max-width:none;margin-left:0;align-self:stretch}}
