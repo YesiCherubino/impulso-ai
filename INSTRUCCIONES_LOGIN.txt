@@ -1,0 +1,68 @@
+IMPULSO — LOGIN Y SESIONES (ACTUALIZACIÓN)
+=========================================
+
+ESTADO: Implementación para validación local. No desplegar en producción antes de probar el login, logout, expiración y los permisos.
+
+QUÉ AGREGA
+- Pantalla /login con usuario y contraseña.
+- Nombre del usuario autenticado y botón Cerrar sesión en el menú lateral.
+- Sesión de 8 horas, token aleatorio guardado en cookie HttpOnly, Secure (en producción), SameSite=Lax del dominio del frontend.
+- Registro de usuarios y sesiones en el SQLite del backend; contraseñas hasheadas con scrypt y tokens almacenados como hashes.
+- Protección de las rutas del backend cuando AUTH_ENABLED=true (consultas, reportes, contactos y OpenAI).
+- 5 intentos fallidos bloquean temporalmente la cuenta durante 15 minutos.
+- Todas las llamadas del navegador pasan por rutas del servidor Next.js que envían el token a FastAPI; no guardamos tokens en localStorage ni sessionStorage.
+
+IMPORTANTE
+- El paquete configura por ahora una cuenta inicial (ADMIN_USERNAME). No incluye gestión de múltiples usuarios, roles, recuperación de contraseña ni auditoría por usuario. Es el primer paso del login real.
+- El usuario inicial se crea la primera vez que arranca el backend con AUTH_ENABLED=true. Cambiar ADMIN_PASSWORD en .env NO cambia la contraseña de una cuenta ya creada: requiere una rutina específica de rotación.
+- Para la demo en producción hay que definir un plan de altas/bajas y permisos de operadores antes de uso real en una empresa.
+- El volumen de Railway debe conservar SQLite. Si no, las sesiones y cuentas se pierden en los despliegues.
+- Mantener backend y frontend consistentes: nunca activar solo una mitad en producción.
+
+INSTALACIÓN LOCAL
+1. Descomprimir este ZIP en la carpeta raíz impulso. Solo reemplazar los archivos incluidos. Conservar .env, .env.local, SQLite, node_modules y los demás archivos.
+2. En backend/.env agregar:
+   AUTH_ENABLED=true
+   ADMIN_USERNAME=ventas
+   ADMIN_DISPLAY_NAME=Equipo Comercial
+   ADMIN_PASSWORD=<contraseña privada, única, al menos 12 caracteres>
+   No publicar el archivo ni pegar la contraseña en capturas. Para generar contraseña desde PowerShell:
+   py -c "import secrets; print(secrets.token_urlsafe(24))" | Set-Clipboard
+   En el archivo backend/.env usar Ctrl+V después de ADMIN_PASSWORD=.
+3. Iniciar backend desde backend/:
+   .\.venv\Scripts\python.exe -m pytest -q
+   .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8001 --env-file .env
+4. En frontend/.env.local agregar o cambiar:
+   NEXT_PUBLIC_AUTH_ENABLED=true
+   API_BASE_URL=http://127.0.0.1:8001
+   NEXT_PUBLIC_DEMO_REQUIRES_CODE=false
+   Conservar NEXT_PUBLIC_API_BASE_URL si ya está: el proxy usa API_BASE_URL.
+5. En frontend/ ejecutar:
+   npm run typecheck
+   npm run build
+   npm run dev -- -p 3001
+6. Abrir http://localhost:3001 -> redirige a /login. Ingresar usuario ventas y la contraseña privada de backend/.env.
+7. Verificar: entrar a Consultas, cambiar un estado, salir con Cerrar sesión, intentar entrar a /consultas sin sesión, volver a ingresar. Probar también en modo móvil.
+
+VERCEL (solo después de validar local)
+- API_BASE_URL=https://impulso-ai-production.up.railway.app (sin NEXT_PUBLIC_).
+- NEXT_PUBLIC_AUTH_ENABLED=true
+- NEXT_PUBLIC_DEMO_REQUIRES_CODE=false
+- Mantener las demás variables necesarias sin exponer secretos en NEXT_PUBLIC_.
+- Redisplegar Vercel para compilar las variables públicas.
+
+RAILWAY (solo después de validar local)
+- AUTH_ENABLED=true
+- ADMIN_USERNAME, ADMIN_DISPLAY_NAME y ADMIN_PASSWORD privados en Variables.
+- Conservar OPENAI_API_KEY y resto de configuración.
+- Verificar persistencia de SQLite en volumen y que /api/auth/me devuelve 401 sin sesión.
+- Redisplegar la versión de código nueva desde GitHub.
+
+COMPORTAMIENTO DE SEGURIDAD
+- El backend protege todas las rutas /api/ menos /api/health y los puntos de entrada de login y logout cuando AUTH_ENABLED=true.
+- Esta primera versión usa un solo usuario de arranque. Antes de usar información real de clientes, agregar usuarios individuales, permisos, recuperación de cuentas y registros de auditoría.
+
+PRUEBAS HECHAS AL PREPARAR EL ZIP
+- 25 pruebas Python correctas con sustituto del SDK de OpenAI (no se instaló el SDK real en este entorno).
+- Comprobada sintaxis de los archivos TypeScript con el parser oficial.
+- NO se completó npm run build en este entorno porque no estaban disponibles dependencias de Node para esta carpeta.

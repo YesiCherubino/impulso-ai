@@ -8,6 +8,7 @@ Para que la bandeja, los contactos, Finalizados y Reportes respondan igual con 5
 - Las pantallas piden páginas (limit/offset) y filtran en la base, no en el navegador.
 La única sintaxis específica es LIMIT/OFFSET, concentrada en page_sql().
 """
+import json
 from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -111,6 +112,16 @@ def hours_since(value: str | None, now: datetime | None = None) -> int:
     if not t:
         return 0
     return max(0, int(((now or datetime.now(timezone.utc)) - t).total_seconds() // 3600))
+
+
+def msg_dict(r) -> dict:
+    d = dict(r)
+    raw = d.pop('adjuntos_json', None)
+    try:
+        d['adjuntos'] = json.loads(raw) if raw else []
+    except ValueError:
+        d['adjuntos'] = []
+    return d
 
 
 def response_from_row(r) -> dict:
@@ -346,7 +357,7 @@ def register_escala(app: FastAPI, db_path):
             rows = con.execute(page_sql(f'SELECT * FROM bandeja_consultas WHERE ficha_id IN ({marks}){extra} ORDER BY recibido_el DESC, id DESC',
                                         limite + 1, 0), args).fetchall()
             more = len(rows) > limite
-            messages = [dict(r) for r in reversed(rows[:limite])]
+            messages = [msg_dict(r) for r in reversed(rows[:limite])]
             lote = lote_minimo(con)
             fichas = []
             for r in con.execute(f'SELECT * FROM fichas_consulta WHERE id IN ({marks}) ORDER BY ultimo_mensaje_en DESC', ids):

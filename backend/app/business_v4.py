@@ -554,7 +554,9 @@ def init_v4(db_path: Path) -> None:
         con.execute("UPDATE fichas_consulta SET estado_gestion='calificada' WHERE estado_gestion='en_gestion'")
         # Contactos sin gestión (históricos): se les crea una, con el estado equivalente, para que entren al
         # pipeline y para que Reportes y Finalizados coincidan.
-        legacy = con.execute('''SELECT * FROM oportunidades o WHERE o.fusionada_con IS NULL
+        # Los clientes importados desde Tango no generan gestión: solo la tienen cuando escriben.
+        imported = "AND o.importado_en IS NULL" if 'importado_en' in opps else ''
+        legacy = con.execute(f'''SELECT * FROM oportunidades o WHERE o.fusionada_con IS NULL {imported}
                  AND NOT EXISTS (SELECT 1 FROM fichas_consulta f WHERE f.oportunidad_id=o.id)''').fetchall()
         for opp in legacy:
             create_case_for_contact(con, opp)
@@ -590,6 +592,7 @@ class OwnerInput(BaseModel):
 class ReplyInput(BaseModel):
     texto: str = Field(min_length=1, max_length=7000)
     canal: Literal['WhatsApp', 'Correo'] = 'WhatsApp'
+    adjuntos: list[int] = Field(default_factory=list, max_length=10)
 
 
 class CommercialSettings(BaseModel):
@@ -704,6 +707,11 @@ def register_business_v4(app: FastAPI, db_path: Path):
                 con.execute("INSERT INTO interacciones (oportunidad_id,tipo,descripcion,fecha) VALUES (?,?,?,?)",
                             (opp_id, 'correo' if payload.canal == 'Correo' else 'nota',
                              f'Respuesta registrada por {payload.canal}: {payload.texto.strip()[:300]}', today))
-            from .escala import touch_messages
+            if payload.adjuntos:
+                marks = ','.join('?' * len(payload.adjuntos))
+                docs = [{'id': d['id'], 'nombre': d['nombre'], 'mime': d['mime'], 'tamano': d['tamano']} for d in con.execute(
+                    f'SELECT id,nombre,mime,tamano FROM documentos WHERE id IN ({marks})', payload.adjuntos)]
+                con.execute('UPDATE bandeja_consultas SET adjuntos_json=? WHERE id=?', (json.dumps(docs, ensure_ascii=False), cur.lastrowid))
+            from .escala import touch_messages, msg_dict
             touch_messages(con, cur.lastrowid, message_id)
-            return dict(con.execute('SELECT * FROM bandeja_consultas WHERE id=?', (cur.lastrowid,)).fetchone())
+            return msg_dict(con.execute('SELECT * FROM bandeja_consultas WHERE id=?', (cur.lastrowid,)).fetchone())

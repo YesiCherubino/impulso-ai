@@ -1,16 +1,17 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {X,Mail,MessageCircle,ArrowRightLeft,AlertTriangle,Sparkles,UserCheck,Archive,Merge,Send} from 'lucide-react';
+import {X,Mail,MessageCircle,ArrowRightLeft,AlertTriangle,Sparkles,UserCheck,Archive,Merge,Send,Receipt,Forward} from 'lucide-react';
 import {api,qs,Pagina,FichaConsulta,ConsultaBandeja,TipoConsulta,tiposConsulta,Responsable,UsuarioSesion,cotizacionTexto,unidades,esCerrada,estadoGestionNombre} from '@/lib/api';
 import ChecklistEditor from '@/components/checklist-editor';
 import CaseStatusSelect from '@/components/case-status';
+import QuoteDialog from '@/components/quote-dialog';
 type Fields={titulo:string;cliente:string;contacto:string;producto:string;cantidad:string;tipo_consulta:TipoConsulta;presentacion:string;packaging:string;resumen:string;
  formula:string;marca_registrada:string;registro_anmat:string;destino:string;pais_destino:string;plazo_deseado:string;localidad:string};
 const toFields=(f:FichaConsulta):Fields=>({titulo:f.titulo,cliente:f.cliente,contacto:f.contacto,producto:f.producto,cantidad:f.cantidad==null?'':String(f.cantidad),tipo_consulta:f.tipo_consulta,presentacion:f.presentacion,packaging:f.packaging,resumen:f.resumen,
  formula:f.formula||'sin_especificar',marca_registrada:f.marca_registrada||'sin_especificar',registro_anmat:f.registro_anmat||'sin_especificar',destino:f.destino||'',pais_destino:f.pais_destino||'',plazo_deseado:f.plazo_deseado||'',localidad:f.localidad||''});
 export default function CaseDialog({fichaId,onClose,allowMove=false,readOnly=false}:{fichaId:number;onClose:()=>void;allowMove?:boolean;readOnly?:boolean}){
  const [ficha,setFicha]=useState<FichaConsulta|null>(null),[cases,setCases]=useState<FichaConsulta[]>([]),[fields,setFields]=useState<Fields|null>(null),[dirty,setDirty]=useState(false),[saving,setSaving]=useState(''),[error,setError]=useState(''),[moving,setMoving]=useState<number|null>(null),[destination,setDestination]=useState('');
- const [user,setUser]=useState<UsuarioSesion|null>(null),[owners,setOwners]=useState<Responsable[]>([]),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
+ const [user,setUser]=useState<UsuarioSesion|null>(null),[owners,setOwners]=useState<Responsable[]>([]),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[quote,setQuote]=useState(false);
  const token=useRef(0);
  const reload=useCallback(async()=>{const f=await api<FichaConsulta>(`/api/fichas/${fichaId}`);setFicha(f);setFields(toFields(f));setDirty(false);return f},[fichaId]);
  useEffect(()=>{let active=true;void api<FichaConsulta>(`/api/fichas/${fichaId}`).then(async f=>{if(!active)return;setFicha(f);setFields(toFields(f));setDirty(false);
@@ -34,6 +35,8 @@ export default function CaseDialog({fichaId,onClose,allowMove=false,readOnly=fal
     <div className="v5-case-bar-item"><small>Estado</small>{readOnly?<strong>{estadoGestionNombre[ficha.estado_gestion||'sin_atender']}</strong>:<CaseStatusSelect fichaId={fichaId} value={ficha.estado_gestion||'sin_atender'} quote={{monto:ficha.cotizacion_monto,moneda:ficha.cotizacion_moneda}} onChanged={async()=>{await reload();setNotice('Estado actualizado')}} onError={setError}/>}</div>
     <div className="v5-case-bar-item"><small>Responsable</small>{readOnly?<strong>{ownerName(ficha.responsable)}</strong>:isAdmin?<select aria-label="Responsable" value={ficha.responsable||''} disabled={busy} onChange={e=>void assign(e.target.value)}><option value="">Sin asignar</option>{owners.map(o=><option key={o.username} value={o.username}>{o.name}</option>)}{ficha.responsable&&!owners.some(o=>o.username===ficha.responsable)&&<option value={ficha.responsable}>{ficha.responsable}</option>}</select>:<span className="v5-inline">{ownerName(ficha.responsable)}{user&&ficha.responsable!==user.username&&!ficha.responsable&&<button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={()=>void assign(user.username)}><UserCheck size={14}/> Asignarme</button>}{user&&ficha.responsable===user.username&&<button type="button" className="v3-text-action" disabled={busy} onClick={()=>void assign('')}>Quitarme</button>}</span>}</div>
     {ficha.cotizacion_monto!=null&&<div className="v5-case-bar-item"><small>Cotización</small><strong>{cotizacionTexto(ficha.cotizacion_monto,ficha.cotizacion_moneda)}</strong><small>{ficha.cotizacion_fecha?new Date(`${ficha.cotizacion_fecha}T12:00:00`).toLocaleDateString('es-AR'):''}{ficha.cotizacion_validez_dias?` · válida ${ficha.cotizacion_validez_dias} días`:''}</small></div>}
+    {!readOnly&&!esCerrada(ficha.estado_gestion)&&<div className="v5-case-bar-item"><small>Cotizador</small><button type="button" className="btn btn-outline btn-sm" onClick={()=>setQuote(true)}><Receipt size={14}/> {ficha.cotizacion_monto!=null?'Nueva cotización':'Cotizar'}</button></div>}
+    {ficha.derivada_a&&<div className="v5-case-bar-item"><small>Derivada a</small><strong><Forward size={13}/> {ficha.derivada_a}</strong></div>}
     {ficha.motivo_cierre&&esCerrada(ficha.estado_gestion)&&<div className="v5-case-bar-item"><small>Motivo de cierre</small><strong>{ficha.motivo_cierre}</strong></div>}
    </section>
    {ficha.bajo_minimo&&<p className="v5-banner is-warning"><AlertTriangle size={16}/> Bajo mínimo: {unidades(ficha.cantidad)} para un lote mínimo de {unidades(ficha.lote_minimo)}</p>}
@@ -63,5 +66,6 @@ export default function CaseDialog({fichaId,onClose,allowMove=false,readOnly=fal
    <section><h3>Mensajes asociados</h3><div className="v3-case-thread">{ficha.mensajes?.map((m:ConsultaBandeja)=><article className={`v3-bubble ${m.direccion==='saliente'?'outgoing v5-outgoing':'incoming'}`} key={m.id}><small>{m.direccion==='saliente'?<Send size={13}/>:m.canal==='Correo'?<Mail size={13}/>:<MessageCircle size={13}/>} {m.direccion==='saliente'?`Respuesta registrada${m.usuario?` por ${m.usuario}`:''} · `:''}{m.canal} · {new Date(m.recibido_el).toLocaleString('es-AR')}</small>{m.asunto&&<strong>{m.asunto}</strong>}<p>{m.texto}</p>{allowMove&&!readOnly&&m.direccion!=='saliente'&&<button className="v3-text-action" onClick={()=>{setMoving(m.id);setDestination('')}}><ArrowRightLeft size={14}/> Cambiar gestión</button>}{moving===m.id&&<div className="v3-move"><select value={destination} onChange={e=>setDestination(e.target.value)}><option value="">Crear nueva gestión</option>{cases.filter(c=>c.id!==fichaId&&(c.oportunidad_id===ficha.oportunidad_id||c.cliente===ficha.cliente)).map(c=><option key={c.id} value={c.id}>{c.codigo} · {c.titulo}</option>)}</select><button className="btn btn-outline" onClick={()=>void move(m.id)}>Mover</button><button className="btn btn-outline" onClick={()=>setMoving(null)}>Cancelar</button></div>}</article>)}</div></section>
    {error&&<p className="alert error" role="alert">{error}</p>}
   </div>}
+ {quote&&<QuoteDialog fichaId={fichaId} onClose={()=>setQuote(false)} onSaved={msg=>{void reload();setNotice(msg)}}/>}
  </div></div>;
 }

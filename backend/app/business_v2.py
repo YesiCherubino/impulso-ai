@@ -293,7 +293,8 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
         with connect(db_path) as con:
             row=con.execute('SELECT * FROM fichas_consulta WHERE id=?',(ficha_id,)).fetchone()
             if not row:raise HTTPException(404,'Ficha no encontrada')
-            messages=[dict(r) for r in con.execute('SELECT * FROM bandeja_consultas WHERE ficha_id=? ORDER BY recibido_el,id',(ficha_id,))]
+            from .escala import msg_dict
+            messages=[msg_dict(r) for r in con.execute('SELECT * FROM bandeja_consultas WHERE ficha_id=? ORDER BY recibido_el,id',(ficha_id,))]
             return {**row_ficha(row,lote_minimo(con)),'mensajes':messages,'duplicados':duplicate_candidates(con,ficha_id)}
 
     @app.post('/api/fichas/{ficha_id}/edit')

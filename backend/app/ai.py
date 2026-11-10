@@ -108,3 +108,27 @@ def generar_seguimiento(contexto: str, profile: dict|None=None) -> SeguimientoGe
     )
     if r.output_parsed is None: raise RuntimeError('El modelo no devolvió un seguimiento válido')
     return r.output_parsed
+
+
+class TextoTransformado(BaseModel):
+    texto: str = Field(description="Resultado listo para usar, sin comentarios adicionales")
+
+ACCIONES_TEXTO = {
+    'mejorar': "Mejorá la redacción del borrador de un vendedor: corregí ortografía, puntuación y claridad, con tono profesional y cordial. "
+               "Conservá exactamente los datos, cifras, nombres y compromisos; no agregues información nueva.",
+    'traducir_en': "Traducí el texto al inglés comercial profesional. Conservá cifras, nombres y formato. No agregues información.",
+    'traducir_pt': "Traducí el texto al portugués de Brasil comercial profesional. Conservá cifras, nombres y formato. No agregues información.",
+    'resumir': "Resumí la conversación comercial para un vendedor que retoma el caso: en 3 a 6 viñetas breves indicá qué pidió el cliente, "
+               "qué datos dio, qué se le respondió, qué quedó pendiente y el próximo paso sugerido. Solo hechos que constan en el texto.",
+}
+
+def transformar_texto(accion: str, texto: str, profile: dict|None=None) -> str:
+    extra = personalized_instructions(profile) if accion == 'mejorar' else ''
+    r = _client().responses.parse(
+        model=os.environ.get('OPENAI_MODEL', 'gpt-4.1-mini'),
+        instructions=SYSTEM + extra + ' ' + ACCIONES_TEXTO[accion],
+        input=texto,
+        text_format=TextoTransformado,
+    )
+    if r.output_parsed is None: raise RuntimeError('El modelo no devolvió un texto válido')
+    return r.output_parsed.texto

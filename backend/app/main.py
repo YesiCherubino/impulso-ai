@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import json
+from typing import Literal
 import logging
 import os
 import secrets
@@ -11,6 +12,7 @@ from . import ai, auth
 from .business_v2 import register_business_v2
 from .business_v3 import init_v3, register_business_v3
 from .escala import register_escala
+from .comercial_v5 import init_v5, register_v5
 from .business_v4 import (init_v4, register_business_v4, build_case_context, apply_analysis,
                           sync_contact_followup, complete_contact_followup, create_case_for_contact)
 from fastapi import FastAPI, HTTPException, Request, Depends
@@ -38,6 +40,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
         auth.init_auth(db_path)
         init_v3(db_path)
         init_v4(db_path)
+        init_v5(db_path)
         yield
 
     # Para demos públicas, la clave de acceso es obligatoria y no se expone en Next.js.
@@ -276,6 +279,8 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
     class AnalizarBandejaInput(BaseModel):
         regenerar: bool = False
         informar_lote_minimo: bool = False
+        # 'seguimiento': el cliente no respondió una cotización/propuesta; se pide un mensaje para retomar.
+        objetivo: Literal['responder', 'seguimiento'] = 'responder'
 
     class GuardarBorradorInput(BaseModel):
         borrador: str = Field(max_length=7000)
@@ -307,7 +312,11 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
             # La IA recibe la gestión completa: datos de la ficha + todos los mensajes, de todos los canales.
             texto = (build_case_context(con, msg['ficha_id'], message_id, payload.informar_lote_minimo)
                      if msg['ficha_id'] else msg['texto'])
-        if existing and existing['resultado'] is not None and not payload.regenerar:
+            if payload.objetivo == 'seguimiento':
+                texto += ('\n\nINDICACIÓN DEL VENDEDOR: el cliente no respondió desde el último mensaje de Pasmanter. '
+                          'En respuesta_sugerida prepará un mensaje breve y cordial de seguimiento para retomar el contacto, '
+                          'recordando lo enviado (sin inventar montos ni condiciones) y preguntando si tiene dudas o puede avanzar.')
+        if existing and existing['resultado'] is not None and not payload.regenerar and payload.objetivo == 'responder':
             return existing
         reserve_ai_call()
         try:
@@ -510,6 +519,8 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
                 return {}
     app.state.analizar_consulta = lambda texto: ai.analizar_consulta(texto, get_ai_profile())
     app.state.generar_seguimiento = lambda contexto: ai.generar_seguimiento(contexto, get_ai_profile())
+    app.state.transformar_texto = lambda accion, texto: ai.transformar_texto(accion, texto, get_ai_profile())
+    app.state.reserve_ai_call = reserve_ai_call
 
     @app.post('/api/ai/analyze-inquiry', response_model=ai.ConsultaExtraida, dependencies=[Depends(require_access)])
     def analyze_inquiry(payload: ConsultaInput):
@@ -592,6 +603,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
     register_business_v3(app, db_path)
     register_business_v4(app, db_path)
     register_escala(app, db_path)
+    register_v5(app, db_path)
     return app
 
 app = create_app()

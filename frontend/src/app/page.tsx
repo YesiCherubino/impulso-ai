@@ -3,6 +3,7 @@ import Link from 'next/link';
 import {useCallback,useEffect,useState} from 'react';
 import {Search,Plus,ArrowUpRight,X,List,Columns3,Loader2} from 'lucide-react';
 import Shell from '@/components/shell';
+import ExportButton from '@/components/export-button';
 import CaseStatusSelect from '@/components/case-status';
 import {api,qs,FichaConsulta,ContactoResumen,Pagina,tipoConsultaNombre,TipoConsulta,tiposConsulta,UsuarioSesion,ESTADOS_ABIERTOS,estadoGestionNombre,unidades,cotizacionTexto,Responsable} from '@/lib/api';
 const empty={cliente:'',contacto:'',producto:'',cantidad:'',tipo_consulta:'sin_clasificar' as TipoConsulta,notas:''};
@@ -30,7 +31,7 @@ export default function Contactos(){
  const ownerName=(u?:string)=>owners.find(x=>x.username===u)?.name||u||'Sin asignar';
  async function save(e:React.FormEvent){e.preventDefault();setBusy(true);setError('');try{await api('/api/opportunities',{method:'POST',body:JSON.stringify({...form,cantidad:form.cantidad?Number(form.cantidad):null,monto_estimado_usd:null})});setForm(empty);setOpen(false);await load()}catch(e){setError(String(e))}finally{setBusy(false)}}
  const boardTotal=ESTADOS_ABIERTOS.reduce((n,s)=>n+(columns[s]?.total||0),0);
- return <Shell><div className="v2-page-head"><div><div className="eyebrow">GESTIÓN COMERCIAL / CONTACTOS</div><h1>Ficha de contactos</h1></div>{!readonly&&<button className="btn btn-primary" onClick={()=>setOpen(true)}><Plus size={17}/> Nuevo contacto</button>}</div>
+ return <Shell><div className="v2-page-head"><div><div className="eyebrow">GESTIÓN COMERCIAL / CONTACTOS</div><h1>Ficha de contactos</h1></div><div className="v2-head-right"><ExportButton path={`/api/export/contactos?${qs({q:query})}`} onError={setError}/>{!readonly&&<button className="btn btn-primary" onClick={()=>setOpen(true)}><Plus size={17}/> Nuevo contacto</button>}</div></div>
  {error&&<div className="alert error" role="alert">{error}</div>}
  {boardError&&<p className="alert error" role="alert">{boardError}</p>}
  <div className="v3-list-board-head"><div className="v3-switch" role="group" aria-label="Vista de contactos"><button className={view==='lista'?'selected':''} onClick={()=>void chooseView('lista')}><List size={15}/> Lista</button><button className={view==='tablero'?'selected':''} onClick={()=>void chooseView('tablero')}><Columns3 size={15}/> Tablero</button></div></div>

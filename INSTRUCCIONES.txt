@@ -1,0 +1,52 @@
+IMPULSO - CORRECCIÓN DEL LOGIN Y TESTS
+
+ESTA ACTUALIZACIÓN SOLO CAMBIA 4 ARCHIVOS:
+ frontend/src/app/login/page.tsx
+ frontend/src/app/login/login.css
+ frontend/src/app/api/session/login/route.ts
+ backend/tests/conftest.py
+
+1. Hacé una copia de seguridad de tu carpeta impulso.
+2. Descomprimí este ZIP y copiá las carpetas frontend y backend sobre tu proyecto local, reemplazando SOLO esos archivos. No borres los demás.
+3. Conservá .env, .env.local, la base SQLite, package.json y package-lock.json.
+4. Revisa frontend/.env.local (ajustá únicamente si está mal):
+   API_BASE_URL=http://127.0.0.1:8001
+   NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8001
+   NEXT_PUBLIC_AUTH_ENABLED=true
+   NEXT_PUBLIC_DEMO_REQUIRES_CODE=false
+   IMPORTANTE: API_BASE_URL tiene prioridad en la ruta de login, y debe ser accesible desde el proceso Next.js.
+5. Abrí dos terminales DISTINTAS:
+   Terminal BACKEND, desde impulso/backend:
+      .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8001 --env-file .env
+   Deberías ver 'Application startup complete.' y mantener esta terminal abierta.
+   Probá http://127.0.0.1:8001/api/health
+   Terminal FRONTEND, desde impulso/frontend:
+      npm run typecheck
+      npm run build
+      npm run dev -- -p 3001
+6. Abrí http://localhost:3001/login (sin mostrar tu contraseña en capturas).
+7. En otra terminal, desde impulso/backend:
+      .\.venv\Scripts\python.exe -m pytest -q
+   Se esperan 25 pruebas correctas en el código base usado para el parche.
+
+MENSAJES AL USUARIO:
+ - 401: Usuario o contraseña incorrectos
+ - 502 / fallo de red: No se pudo conectar con el servidor
+ - 429: Demasiados intentos. Intentá más tarde
+ - 400: Ingresá usuario y contraseña
+
+SI APARECE 502 Y LA TERMINAL DICE ECONNREFUSED 127.0.0.1:8001:
+ El backend NO está escuchando en esa dirección desde el proceso de Next.js.
+ Verificá que esté iniciado y que http://127.0.0.1:8001/api/health responda.
+ No es una contraseña incorrecta: es un error de conexión.
+
+NOTA DE SEGURIDAD:
+ Una contraseña quedó visible en una captura de pantalla. Cambiala por otra privada antes de compartir o publicar el proyecto.
+ Si ADMIN_USERNAME ya existe en SQLite, cambiar ADMIN_PASSWORD en .env NO cambia la contraseña de esa cuenta. No borres la base de datos de producción; hacé una rotación controlada de la contraseña del usuario existente.
+
+VALIDACIONES EN ESTE ENTORNO:
+ - Backend: 25/25 tests con SDK OpenAI simulado (no instalado aquí).
+ - Frontend: archivos corregidos; build completo pendiente de verificar con npm en tu PC.
+ - No se modificaron ni eliminaron las credenciales ni las bases de datos.
+
+NO SUBAS A GITHUB HASTA PROBAR EL LOGIN LOCALMENTE.

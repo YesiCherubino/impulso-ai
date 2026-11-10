@@ -31,7 +31,7 @@ export default function Login(){
     else setError(detail||'No se pudo iniciar sesión');
     return;
    }
-   router.replace('/consultas');router.refresh();
+   router.replace('/mi-dia');router.refresh();
   }catch{setError('No se pudo conectar con el servidor')}
   finally{setBusy(false)}
  }
