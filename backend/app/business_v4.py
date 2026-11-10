@@ -402,6 +402,8 @@ def merge_fichas(con, origen_id: int, destino_id: int) -> dict:
     con.execute('''UPDATE fichas_consulta SET estado_gestion='fusionada', fusionada_en=?, cerrada_en=?,
                    motivo_cierre=?, actualizada_en=? WHERE id=?''',
                 (destino_id, stamp(), f"Fusionada en {dst['codigo']}", stamp(), origen_id))
+    from .escala import refresh_case_stats
+    refresh_case_stats(con, [origen_id, destino_id])
     return {'origen': src['codigo'], 'destino': dst['codigo'], 'destino_id': destino_id}
 
 
@@ -418,6 +420,49 @@ def duplicate_candidates(con, ficha_id: int) -> list[dict]:
     return [dict(r) for r in rows
             if (key and norm_name(r['cliente']) == key) or
             (me['oportunidad_id'] and r['oportunidad_id'] == me['oportunidad_id'])]
+
+
+def plan_case_merges(con) -> list[tuple[dict, dict]]:
+    """Gestiones ABIERTAS de la misma empresa (nombre normalizado): quedan en la que tiene contacto y más mensajes."""
+    marks = ','.join('?' * len(ESTADOS_ABIERTOS))
+    rows = con.execute(f'''SELECT f.id,f.codigo,f.cliente,f.oportunidad_id,
+                (SELECT COUNT(*) FROM bandeja_consultas b WHERE b.ficha_id=f.id) AS mensajes
+                FROM fichas_consulta f WHERE f.estado_gestion IN ({marks}) ORDER BY f.id''', ESTADOS_ABIERTOS).fetchall()
+    groups = {}
+    for r in rows:
+        groups.setdefault(norm_name(r['cliente']), []).append(dict(r))
+    plan = []
+    for items in groups.values():
+        if len(items) > 1:
+            items.sort(key=lambda f: (f['oportunidad_id'] is None, -f['mensajes'], f['id']))
+            plan += [(f, items[0]) for f in items[1:]]
+    return plan
+
+
+def plan_contact_merges(con) -> list[tuple[dict, dict]]:
+    """Contactos de la misma empresa: quedan en el que tiene más gestiones."""
+    rows = con.execute('''SELECT o.id,o.cliente,(SELECT COUNT(*) FROM fichas_consulta f WHERE f.oportunidad_id=o.id) AS gestiones
+                          FROM oportunidades o WHERE o.fusionada_con IS NULL ORDER BY o.id''').fetchall()
+    groups = {}
+    for r in rows:
+        groups.setdefault(norm_name(r['cliente']), []).append(dict(r))
+    plan = []
+    for items in groups.values():
+        if len(items) > 1:
+            items.sort(key=lambda r: (-r['gestiones'], r['id']))
+            plan += [(r, items[0]) for r in items[1:]]
+    return plan
+
+
+def apply_merge_plan(con) -> dict:
+    """Unifica gestiones abiertas y contactos duplicados. Idempotente; no borra datos."""
+    cases = plan_case_merges(con)
+    for src, dst in cases:
+        merge_fichas(con, src['id'], dst['id'])
+    contacts = plan_contact_merges(con)
+    for src, dst in contacts:
+        merge_contacts(con, src['id'], dst['id'])
+    return {'gestiones_fusionadas': len(cases), 'contactos_unificados': len(contacts)}
 
 
 # ---------------------------------------------------------------------------
@@ -507,9 +552,10 @@ def init_v4(db_path: Path) -> None:
         con.execute('CREATE INDEX IF NOT EXISTS idx_fichas_estado ON fichas_consulta(estado_gestion)')
         # Pipeline único: "En gestión" pasa a "Calificada".
         con.execute("UPDATE fichas_consulta SET estado_gestion='calificada' WHERE estado_gestion='en_gestion'")
-        # Cierres históricos sin gestión: se crea su gestión para que Reportes y Finalizados coincidan.
-        legacy = con.execute('''SELECT * FROM oportunidades o WHERE o.estado IN ('ganada','perdida')
-                 AND o.fusionada_con IS NULL AND NOT EXISTS (SELECT 1 FROM fichas_consulta f WHERE f.oportunidad_id=o.id)''').fetchall()
+        # Contactos sin gestión (históricos): se les crea una, con el estado equivalente, para que entren al
+        # pipeline y para que Reportes y Finalizados coincidan.
+        legacy = con.execute('''SELECT * FROM oportunidades o WHERE o.fusionada_con IS NULL
+                 AND NOT EXISTS (SELECT 1 FROM fichas_consulta f WHERE f.oportunidad_id=o.id)''').fetchall()
         for opp in legacy:
             create_case_for_contact(con, opp)
         # El responsable del contacto pasa a la gestión si esta no tiene uno.
@@ -525,6 +571,9 @@ def init_v4(db_path: Path) -> None:
                  AND NOT EXISTS (SELECT 1 FROM actividades_comerciales a WHERE a.oportunidad_id=o.id
                                  AND a.origen='seguimiento_contacto')''').fetchall():
             sync_contact_followup(con, opp['id'], opp['fecha_seguimiento'], opp['motivo_seguimiento'], opp['cliente'])
+        # Datos resumidos por gestión e índices (escalabilidad).
+        from .escala import init_escala
+        init_escala(con)
 
 
 # ---------------------------------------------------------------------------
@@ -629,7 +678,8 @@ def register_business_v4(app: FastAPI, db_path: Path):
             msg = con.execute('SELECT * FROM bandeja_consultas WHERE id=?', (message_id,)).fetchone()
             if not msg:
                 raise HTTPException(404, 'Mensaje no encontrado')
-            now = stamp()
+            # Misma precisión (segundos) que los mensajes entrantes, para comparar fechas como texto.
+            now = datetime.now(timezone.utc).isoformat(timespec='seconds')
             cur = con.execute('''INSERT INTO bandeja_consultas (cliente,contacto,canal,texto,recibido_el,estado,leido_en,
                      email_remitente,telefono_remitente,asunto,ficha_id,oportunidad_id,direccion,usuario)
                      VALUES (?,?,?,?,?,'resuelta',?,?,?,?,?,?,'saliente',?)''',
@@ -654,4 +704,6 @@ def register_business_v4(app: FastAPI, db_path: Path):
                 con.execute("INSERT INTO interacciones (oportunidad_id,tipo,descripcion,fecha) VALUES (?,?,?,?)",
                             (opp_id, 'correo' if payload.canal == 'Correo' else 'nota',
                              f'Respuesta registrada por {payload.canal}: {payload.texto.strip()[:300]}', today))
+            from .escala import touch_messages
+            touch_messages(con, cur.lastrowid, message_id)
             return dict(con.execute('SELECT * FROM bandeja_consultas WHERE id=?', (cur.lastrowid,)).fetchone())

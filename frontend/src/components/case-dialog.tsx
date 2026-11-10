@@ -1,7 +1,7 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {X,Mail,MessageCircle,ArrowRightLeft,AlertTriangle,Sparkles,UserCheck,Archive,Merge,Send} from 'lucide-react';
-import {api,FichaConsulta,ConsultaBandeja,TipoConsulta,tiposConsulta,Responsable,UsuarioSesion,cotizacionTexto,unidades,esCerrada,estadoGestionNombre} from '@/lib/api';
+import {api,qs,Pagina,FichaConsulta,ConsultaBandeja,TipoConsulta,tiposConsulta,Responsable,UsuarioSesion,cotizacionTexto,unidades,esCerrada,estadoGestionNombre} from '@/lib/api';
 import ChecklistEditor from '@/components/checklist-editor';
 import CaseStatusSelect from '@/components/case-status';
 type Fields={titulo:string;cliente:string;contacto:string;producto:string;cantidad:string;tipo_consulta:TipoConsulta;presentacion:string;packaging:string;resumen:string;
@@ -13,7 +13,9 @@ export default function CaseDialog({fichaId,onClose,allowMove=false,readOnly=fal
  const [user,setUser]=useState<UsuarioSesion|null>(null),[owners,setOwners]=useState<Responsable[]>([]),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
  const token=useRef(0);
  const reload=useCallback(async()=>{const f=await api<FichaConsulta>(`/api/fichas/${fichaId}`);setFicha(f);setFields(toFields(f));setDirty(false);return f},[fichaId]);
- useEffect(()=>{let active=true;void Promise.all([api<FichaConsulta>(`/api/fichas/${fichaId}`),api<FichaConsulta[]>('/api/fichas')]).then(([f,all])=>{if(active){setFicha(f);setCases(all);setFields(toFields(f));setDirty(false)}}).catch(e=>{if(active)setError(String(e))});return()=>{active=false}},[fichaId]);
+ useEffect(()=>{let active=true;void api<FichaConsulta>(`/api/fichas/${fichaId}`).then(async f=>{if(!active)return;setFicha(f);setFields(toFields(f));setDirty(false);
+  // Solo las gestiones del mismo contacto (o empresa): no se carga todo el historial.
+  const page=await api<Pagina<FichaConsulta>>(`/api/fichas-search?${qs(f.oportunidad_id?{oportunidad_id:f.oportunidad_id,limit:200}:{cliente:f.cliente,limit:200})}`);if(active)setCases(page.items)}).catch(e=>{if(active)setError(String(e))});return()=>{active=false}},[fichaId]);
  useEffect(()=>{void fetch('/api/session/me').then(r=>r.ok?r.json():null).then(setUser).catch(()=>{});void api<Responsable[]>('/api/users/responsables').then(setOwners).catch(()=>{})},[]);
  useEffect(()=>{if(!dirty||!fields||readOnly)return;const timer=window.setTimeout(()=>{const seq=++token.current;setSaving('Guardando…');void api<FichaConsulta>(`/api/fichas/${fichaId}/edit`,{method:'POST',body:JSON.stringify({...fields,cantidad:fields.cantidad?Number(fields.cantidad):null,requisitos:ficha?.requisitos||[],datos_faltantes:ficha?.datos_faltantes||[]})}).then(f=>{if(seq===token.current){setFicha(old=>old?{...old,...f}:f);setDirty(false);setSaving('Guardado')}}).catch(e=>{setError(String(e));setSaving('Error al guardar')})},700);return()=>clearTimeout(timer)},[fields,dirty,readOnly,fichaId,ficha]);
  function patch(name:keyof Fields,value:string){setFields(old=>old?{...old,[name]:value}:old);setDirty(true)}

@@ -232,6 +232,8 @@ def seed_demo_v3(con, include_web=True):
         from .business_v4 import apply_form_fields
         apply_form_fields(con,cur.lastrowid)
         demo+=1
+    from .escala import refresh_case_stats
+    refresh_case_stats(con)
     return demo
 
 
@@ -268,12 +270,25 @@ def register_business_v3(app:FastAPI,db_path:Path):
         return {'vista_contactos':view}
 
     @app.get('/api/calendar/events')
-    def calendar_list(request:Request):
+    def calendar_list(request:Request,desde:str='',hasta:str='',vencidos:bool=False):
+        """Con desde/hasta devuelve solo ese rango (la Agenda pide el período visible). vencidos=true suma
+        los seguimientos programados ya vencidos, de cualquier fecha."""
         user=current(request,db_path)
+        where,args=[],[]
+        if user and user['role']=='ventas':
+            where.append('a.responsable=?');args.append(user['username'])
+        if desde or hasta:
+            rango=[]
+            if desde:rango.append('a.inicio>=?');args.append(desde)
+            if hasta:rango.append('a.inicio<?');args.append(hasta)
+            cond=' AND '.join(rango)
+            if vencidos:
+                cond=f"(({cond}) OR (a.tipo='seguimiento' AND a.estado='programada' AND a.inicio<?))";args.append(datetime.now(timezone.utc).isoformat())
+            where.append(cond)
+        sql_where=('WHERE '+' AND '.join(where)) if where else ''
         with connect(db_path) as con:
-            if user and user['role']=='ventas':
-                rows=con.execute('SELECT * FROM actividades_comerciales WHERE responsable=? ORDER BY inicio',(user['username'],)).fetchall()
-            else:rows=con.execute('SELECT * FROM actividades_comerciales ORDER BY inicio').fetchall()
+            rows=con.execute(f'''SELECT a.*,f.codigo AS ficha_codigo,f.titulo AS ficha_titulo FROM actividades_comerciales a
+                             LEFT JOIN fichas_consulta f ON f.id=a.ficha_id {sql_where} ORDER BY a.inicio''',args).fetchall()
             return [dict(r) for r in rows]
 
     @app.post('/api/calendar/events',status_code=201)

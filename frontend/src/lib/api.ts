@@ -55,6 +55,12 @@ export type FichaConsulta = {id:number;codigo:string;oportunidad_id:number|null;
 export type Duplicado={id:number;codigo:string;titulo:string;cliente:string;producto:string;estado_gestion:string;oportunidad_id:number|null;mensajes:number};
 export type GestionHilo={id:number;codigo:string;titulo:string;estado_gestion:string;tipo_consulta:TipoConsulta;tipo_sugerido_ia:number;cantidad:number|null;producto:string;responsable:string;cerrada_en:string|null;cotizacion_monto:number|null;cotizacion_moneda:string;bajo_minimo:boolean};
 export type Responsable={username:string;name:string;role:Rol};
+/* Escalabilidad: listados paginados desde el servidor. */
+export type Pagina<T>={items:T[];total:number;limit:number;offset:number;conteos?:Record<string,number>};
+export type Conversacion={key:string;cliente:string;contacto:string;ultimo:string;mensajes_count:number;no_leidos:number;cerrada:boolean;mensaje_tras_cierre:boolean;respuesta:Respuesta;ultimo_texto:string;ultimo_saliente:boolean;gestion:GestionHilo|null};
+export type ConversacionDetalle=Conversacion&{mensajes:ConsultaBandeja[];hay_anteriores:boolean;fichas:FichaConsulta[]};
+export type ContactoResumen={id:number;cliente:string;contacto:string;email:string;telefono:string;producto:string;cantidad:number|null;tipo_consulta:TipoConsulta;responsable:string;ultimo_contacto:string;fecha_seguimiento:string|null;canal_origen:string;estado_gestion_actual:string;gestiones_abiertas:number;gestiones:number};
+export const qs=(params:Record<string,string|number|boolean|null|undefined>)=>{const u=new URLSearchParams();Object.entries(params).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!=='')u.set(k,String(v))});return u.toString()};
 export const cotizacionTexto=(monto?:number|null,moneda?:string|null)=>monto==null||!moneda?'':`${moneda} ${monto.toLocaleString('es-AR',{maximumFractionDigits:2})}`;
 export const unidades=(n?:number|null)=>n==null?'':`${n.toLocaleString('es-AR')} u.`;
 export function tiempoSinRespuesta(horas:number){if(horas<1)return 'hace menos de 1 h';if(horas<48)return `hace ${horas} h`;return `hace ${Math.floor(horas/24)} días`}
@@ -62,5 +68,5 @@ export type ReportBreakdown=Record<string,{concretadas:number;no_concretadas:num
 export type ReportData={periodo:string;desde:string;hasta:string;canal:string;responsable:string;indicadores:Record<string,number>;canales:Record<string,number>;productos_consultados:[string,number][];origen_datos:string;
  embudo?:{estado:string;cantidad:number;montos:Record<string,number>}[];conversion_por_tipo?:ReportBreakdown;conversion_por_canal?:ReportBreakdown;motivos_no_concretadas?:Record<string,number>;
  tiempo_primera_respuesta?:{promedio_horas:number|null;respondidas:number;sin_respuesta_registrada:number;por_canal:Record<string,{promedio_horas:number|null;gestiones:number}>;por_vendedor:Record<string,{promedio_horas:number|null;gestiones:number}>};
- alertas_sin_respuesta?:{ficha_id:number;codigo:string;cliente:string;horas:number;responsable:string}[];seguimientos_vencidos_detalle?:{id:number;titulo:string;inicio:string;cliente:string;ficha_codigo:string|null}[]};
+ alertas_sin_respuesta?:{ficha_id:number;codigo:string;cliente:string;horas:number;responsable:string;conversacion:string}[];seguimientos_vencidos_detalle?:{id:number;titulo:string;inicio:string;cliente:string;ficha_codigo:string|null;conversacion:string}[]};
 export type ReportResponse={title:string;question:string;report:string;data:ReportData;generated_at:string};

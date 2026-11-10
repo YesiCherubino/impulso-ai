@@ -1,6 +1,6 @@
 """API del backoffice Impulso con autenticación opcional de sesiones."""
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import json
 import logging
@@ -10,6 +10,7 @@ from openai import OpenAIError
 from . import ai, auth
 from .business_v2 import register_business_v2
 from .business_v3 import init_v3, register_business_v3
+from .escala import register_escala
 from .business_v4 import (init_v4, register_business_v4, build_case_context, apply_analysis,
                           sync_contact_followup, complete_contact_followup, create_case_for_contact)
 from fastapi import FastAPI, HTTPException, Request, Depends
@@ -26,7 +27,8 @@ logger = logging.getLogger(__name__)
 class ConsultaInput(BaseModel):
     texto: str = Field(min_length=25, max_length=5000)
 
-DEFAULT_DB = Path(__file__).resolve().parents[1] / "data" / "impulso.sqlite3"
+# IMPULSO_DB_PATH permite levantar el backend sobre otra base (por ejemplo, la demo de escala de 5 años).
+DEFAULT_DB = Path(os.getenv('IMPULSO_DB_PATH') or Path(__file__).resolve().parents[1] / "data" / "impulso.sqlite3")
 
 
 def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
@@ -161,7 +163,12 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
         """UNIQUE identifica cada aviso; actualizar no duplica notificaciones."""
         stamp = datetime.now(timezone.utc).isoformat()
         with connect(db_path) as con:
-            for row in con.execute("SELECT id,cliente,texto,recibido_el FROM bandeja_consultas WHERE direccion<>'saliente'").fetchall():
+            # Incremental: solo mensajes nuevos desde el último aviso y de los últimos 30 días
+            # (con años de historia no se recorren todos los mensajes en cada consulta).
+            watermark = con.execute("SELECT COALESCE(MAX(referencia_id),0) FROM notificaciones WHERE tipo='mensaje'").fetchone()[0]
+            recent = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+            for row in con.execute('''SELECT id,cliente,texto,recibido_el FROM bandeja_consultas
+                                      WHERE direccion<>'saliente' AND id>? AND recibido_el>=?''', (watermark, recent)).fetchall():
                 con.execute('''INSERT OR IGNORE INTO notificaciones
                     (clave,tipo,referencia_id,titulo,detalle,creada_en)
                     VALUES (?,?,?,?,?,?)''',
@@ -254,9 +261,14 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
     def add_inbox_message(payload: NuevaConsulta):
         received = datetime.now(timezone.utc).isoformat()
         with connect(db_path) as con:
+            from .business_v2 import create_ficha
+            from .escala import touch_messages
+            ficha = create_ficha(con, cliente=payload.cliente.strip(), contacto=payload.contacto.strip(),
+                                 titulo=f'Consulta de {payload.cliente.strip()}', incoming_stamp=received)
             cur = con.execute('''INSERT INTO bandeja_consultas
-              (cliente,contacto,canal,texto,recibido_el,estado) VALUES (?,?,?,?,?,'nueva')''',
-              (payload.cliente.strip(),payload.contacto.strip(),payload.canal,payload.texto.strip(),received))
+              (cliente,contacto,canal,texto,recibido_el,estado,ficha_id) VALUES (?,?,?,?,?,'nueva',?)''',
+              (payload.cliente.strip(),payload.contacto.strip(),payload.canal,payload.texto.strip(),received,ficha))
+            touch_messages(con, cur.lastrowid)
             row = con.execute('SELECT * FROM bandeja_consultas WHERE id=?',(cur.lastrowid,)).fetchone()
         sync_notifications()
         return dict(row)
@@ -351,6 +363,8 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
                                   (payload.estado, message_id))
             if updated.rowcount == 0:
                 raise HTTPException(404, 'Consulta no encontrada')
+            from .escala import touch_messages
+            touch_messages(con, message_id)
             row = con.execute('SELECT * FROM bandeja_consultas WHERE id = ?', (message_id,)).fetchone()
         return dict(row)
 
@@ -577,6 +591,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
     register_business_v2(app, db_path, reserve_ai_call)
     register_business_v3(app, db_path)
     register_business_v4(app, db_path)
+    register_escala(app, db_path)
     return app
 
 app = create_app()

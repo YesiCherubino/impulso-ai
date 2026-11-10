@@ -5,15 +5,18 @@ Reglas:
 - Las gestiones fusionadas y las consultas no comerciales no cuentan en los KPIs de ventas.
 - Los indicadores de flujo (consultas recibidas, cierres) usan el período; los de situación
   actual (sin atender, en gestión, vencidos, sin respuesta) muestran el estado de hoy.
+
+Escalabilidad: todo se calcula con agregaciones SQL estándar sobre los datos resumidos de cada
+gestión (ver escala.py); no se recorren los mensajes en Python.
 """
 from datetime import date, datetime, timedelta, timezone
 
-from .business_v4 import (ESTADOS_ABIERTOS, ESTADOS_GESTION, canal_base, es_bajo_minimo, lote_minimo,
-                          parse_dt)
+from .business_v4 import ESTADOS_ABIERTOS, ESTADOS_GESTION, TIPOS_CON_LOTE_MINIMO, canal_base, lote_minimo, parse_dt
 
 PERIODOS = ('mes', 'semana', 'trimestre', 'todos')
 HORAS_ALERTA = 24
 DIAS_SIN_CONTACTO = 7
+OPEN_SQL = "('sin_atender','calificada','cotizada','muestra_piloto')"
 
 
 def period_since(period: str, today: date | None = None) -> date:
@@ -31,42 +34,8 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def load_cases(con, *, include_non_commercial=False) -> list[dict]:
-    """Gestiones vigentes (no fusionadas) con canal de origen y estado de respuesta."""
-    cases = {r['id']: dict(r) for r in con.execute("SELECT * FROM fichas_consulta WHERE estado_gestion<>'fusionada'")}
-    for c in cases.values():
-        c['mensajes'] = []
-    for m in con.execute('SELECT * FROM bandeja_consultas WHERE ficha_id IS NOT NULL ORDER BY recibido_el,id'):
-        if m['ficha_id'] in cases:
-            cases[m['ficha_id']]['mensajes'].append(dict(m))
-    contacts = {r['id']: dict(r) for r in con.execute('SELECT id,canal_origen FROM oportunidades')}
-    now = _now()
-    out = []
-    for c in cases.values():
-        if not include_non_commercial and c['tipo_consulta'] == 'no_comercial':
-            continue
-        incoming = [m for m in c['mensajes'] if m.get('direccion', 'entrante') != 'saliente']
-        outgoing = [m for m in c['mensajes'] if m.get('direccion') == 'saliente']
-        first_in = incoming[0] if incoming else None
-        c['canal_origen'] = canal_base(first_in['canal']) if first_in else \
-            canal_base((contacts.get(c['oportunidad_id']) or {}).get('canal_origen', '') or '')
-        c['respuesta'] = response_status(incoming, outgoing, c['estado_gestion'], now)
-        c['primera_respuesta_horas'] = None
-        c['primera_respuesta_usuario'] = ''
-        if first_in:
-            t0 = parse_dt(first_in['recibido_el'])
-            for o in outgoing:
-                t1 = parse_dt(o['recibido_el'])
-                if t0 and t1 and t1 >= t0:
-                    c['primera_respuesta_horas'] = round((t1 - t0).total_seconds() / 3600, 1)
-                    c['primera_respuesta_usuario'] = o.get('usuario') or ''
-                    break
-        out.append(c)
-    return out
-
-
 def response_status(incoming: list[dict], outgoing: list[dict], estado: str, now: datetime | None = None) -> dict:
-    """¿El último mensaje del cliente está sin responder? Solo aplica a gestiones abiertas."""
+    """Versión en memoria (la usa el endpoint histórico /api/inbox/threads)."""
     now = now or _now()
     if estado not in ESTADOS_ABIERTOS or not incoming:
         return {'pendiente': False, 'horas': 0, 'desde': None}
@@ -79,65 +48,41 @@ def response_status(incoming: list[dict], outgoing: list[dict], estado: str, now
     return {'pendiente': True, 'horas': max(0, int((now - since).total_seconds() // 3600)), 'desde': pending[0]['recibido_el']}
 
 
-def _match(c: dict, canal: str, responsable: str) -> bool:
-    if canal != 'todos' and c['canal_origen'].casefold() != canal.casefold():
-        return False
-    if responsable and (c.get('responsable') or '').casefold() != responsable.casefold():
-        return False
-    return True
-
-
-def filter_cases(cases, canal='todos', responsable=''):
-    return [c for c in cases if _match(c, canal, responsable)]
-
-
-def count_concretadas(cases, since_iso: str) -> int:
-    return sum(1 for c in cases if c['estado_gestion'] == 'concretada' and (c['cerrada_en'] or c['actualizada_en'])[:10] >= since_iso)
-
-
-def count_no_concretadas(cases, since_iso: str) -> int:
-    return sum(1 for c in cases if c['estado_gestion'] == 'no_concretada' and (c['cerrada_en'] or c['actualizada_en'])[:10] >= since_iso)
+def case_filter(canal='todos', responsable='', alias='f') -> tuple[str, list]:
+    """Filtro base de gestiones para los KPIs de ventas."""
+    where = [f"{alias}.estado_gestion<>'fusionada'", f"{alias}.tipo_consulta<>'no_comercial'"]
+    args = []
+    if canal == 'WhatsApp':
+        where.append(f"{alias}.canal_origen LIKE 'WhatsApp%'")
+    elif canal and canal != 'todos':
+        where.append(f'{alias}.canal_origen=?'); args.append(canal)
+    if responsable:
+        where.append(f'LOWER({alias}.responsable)=LOWER(?)'); args.append(responsable)
+    return ' AND '.join(where), args
 
 
 def list_seguimientos_vencidos(con, responsable: str = '', now: datetime | None = None) -> list[dict]:
     """Seguimientos de agenda programados y vencidos (misma fuente que la Agenda)."""
     now = now or _now()
-    rows = con.execute('''SELECT a.*, f.codigo AS ficha_codigo, COALESCE(o.cliente, f.cliente, '') AS cliente
+    # Prefiltro en la base (con margen de un día por las zonas horarias) y verificación exacta en Python.
+    limit = (now + timedelta(days=1)).isoformat()
+    args = [limit]
+    extra = ''
+    if responsable:
+        extra = ' AND LOWER(a.responsable)=LOWER(?)'
+        args.append(responsable)
+    rows = con.execute(f'''SELECT a.*, f.codigo AS ficha_codigo, COALESCE(o.cliente, f.cliente, '') AS cliente,
+                          CASE WHEN f.oportunidad_id IS NOT NULL THEN f.oportunidad_id ELSE -f.id END AS conv
                           FROM actividades_comerciales a
                           LEFT JOIN fichas_consulta f ON f.id=a.ficha_id
                           LEFT JOIN oportunidades o ON o.id=a.oportunidad_id
-                          WHERE a.tipo='seguimiento' AND a.estado='programada' ORDER BY a.inicio''').fetchall()
+                          WHERE a.tipo='seguimiento' AND a.estado='programada' AND a.inicio<?{extra} ORDER BY a.inicio''', args).fetchall()
     out = []
     for r in rows:
         start = parse_dt(r['inicio'])
-        if not start or start > now:
-            continue
-        if responsable and (r['responsable'] or '').casefold() != responsable.casefold():
-            continue
-        out.append(dict(r))
+        if start and start <= now:
+            out.append(dict(r))
     return out
-
-
-def list_sin_respuesta(cases, horas: int = HORAS_ALERTA) -> list[dict]:
-    rows = [c for c in cases if c['respuesta']['pendiente'] and c['respuesta']['horas'] >= horas]
-    rows.sort(key=lambda c: -c['respuesta']['horas'])
-    return [{'ficha_id': c['id'], 'codigo': c['codigo'], 'cliente': c['cliente'], 'horas': c['respuesta']['horas'],
-             'responsable': c.get('responsable') or ''} for c in rows]
-
-
-def contacts_without_contact(con, cases, responsable='') -> int:
-    """Contactos con gestión abierta, sin seguimiento programado y +7 días sin contacto."""
-    open_contacts = {c['oportunidad_id'] for c in cases if c['estado_gestion'] in ESTADOS_ABIERTOS and c['oportunidad_id']}
-    limit = (date.today() - timedelta(days=DIAS_SIN_CONTACTO)).isoformat()
-    count = 0
-    for r in con.execute('SELECT * FROM oportunidades WHERE fusionada_con IS NULL'):
-        if r['id'] not in open_contacts or r['fecha_seguimiento']:
-            continue
-        if responsable and (r['responsable'] or '').casefold() != responsable.casefold():
-            continue
-        if r['ultimo_contacto'] <= limit:
-            count += 1
-    return count
 
 
 def _avg(values):
@@ -147,120 +92,139 @@ def _avg(values):
 
 def report_data(con, *, period='mes', canal='todos', responsable='', user=None) -> dict:
     today = date.today()
-    since = period_since(period, today)
-    since_iso = since.isoformat()
+    now = _now()
+    since_iso = period_since(period, today).isoformat()
     role = user['role'] if user else 'administrador'
     responsible = (responsable or '').strip()
     if role == 'ventas':
         responsible = user['username']
-    all_cases = load_cases(con)
-    cases = filter_cases(all_cases, canal, responsible)
-    case_ids = {c['id'] for c in cases}
-    open_cases = [c for c in cases if c['estado_gestion'] in ESTADOS_ABIERTOS]
+    base, args = case_filter(canal, responsible)
+    open_base = f'{base} AND f.estado_gestion IN {OPEN_SQL}'
 
-    # Mensajes entrantes del período (las respuestas registradas no son consultas).
-    messages = []
-    for c in cases:
-        for m in c['mensajes']:
-            if m.get('direccion', 'entrante') == 'saliente':
-                continue
-            if m['recibido_el'][:10] >= since_iso:
-                messages.append(m)
-    if not responsible:
-        for m in con.execute("SELECT * FROM bandeja_consultas WHERE ficha_id IS NULL AND direccion<>'saliente'"):
-            if m['recibido_el'][:10] >= since_iso and (canal == 'todos' or canal_base(m['canal']).casefold() == canal.casefold()):
-                messages.append(dict(m))
-    unread = sum(1 for c in cases for m in c['mensajes'] if m.get('direccion', 'entrante') != 'saliente' and not m['leido_en'])
+    def one(sql, extra_args=()):
+        return con.execute(sql, [*args, *extra_args]).fetchone()[0] or 0
 
-    channel_counts = {key: sum(1 for m in messages if canal_base(m['canal']) == key) for key in ('WhatsApp', 'Correo', 'Formulario web')}
-    product_counts = {}
-    for c in cases:
-        if (c['creada_en'] or '')[:10] >= since_iso:
-            name = (c['producto'] or '').strip() or 'No especificado'
-            product_counts[name] = product_counts.get(name, 0) + 1
+    # Mensajes entrantes del período, por canal (las respuestas registradas no son consultas).
+    canales_rows = con.execute(f'''SELECT b.canal, COUNT(*) AS n FROM bandeja_consultas b JOIN fichas_consulta f ON f.id=b.ficha_id
+                                   WHERE {base} AND b.direccion<>'saliente' AND b.recibido_el>=? GROUP BY b.canal''',
+                               [*args, since_iso]).fetchall()
+    channel_counts = {'WhatsApp': 0, 'Correo': 0, 'Formulario web': 0}
+    recibidas = 0
+    for r in canales_rows:
+        recibidas += r['n']
+        key = canal_base(r['canal'])
+        if key in channel_counts:
+            channel_counts[key] += r['n']
 
+    threshold = (now - timedelta(hours=HORAS_ALERTA)).isoformat()
+    limit_contact = (today - timedelta(days=DIAS_SIN_CONTACTO)).isoformat()
+    lote = lote_minimo(con)
+    lotes = ','.join(f"'{t}'" for t in TIPOS_CON_LOTE_MINIMO)
     vencidos = list_seguimientos_vencidos(con, responsible)
-    sin_respuesta = list_sin_respuesta(open_cases)
-    minimo = lote_minimo(con)
 
-    # Embudo por estado: gestiones creadas en el período.
-    period_cases = [c for c in cases if (c['creada_en'] or '')[:10] >= since_iso]
+    indicadores = {
+        'consultas_recibidas': recibidas,
+        'no_leidas': one(f'SELECT SUM(f.no_leidos_count) FROM fichas_consulta f WHERE {base}'),
+        'sin_atender': one(f"SELECT COUNT(*) FROM fichas_consulta f WHERE {base} AND f.estado_gestion='sin_atender'"),
+        'en_gestion': one(f"SELECT COUNT(*) FROM fichas_consulta f WHERE {open_base} AND f.estado_gestion<>'sin_atender'"),
+        'contactos_activos': one(f'SELECT COUNT(DISTINCT f.oportunidad_id) FROM fichas_consulta f WHERE {open_base}'),
+        'concretadas': one(f"SELECT COUNT(*) FROM fichas_consulta f WHERE {base} AND f.estado_gestion='concretada' AND f.cerrada_en>=?", [since_iso]),
+        'no_concretadas': one(f"SELECT COUNT(*) FROM fichas_consulta f WHERE {base} AND f.estado_gestion='no_concretada' AND f.cerrada_en>=?", [since_iso]),
+        'seguimientos_vencidos': len(vencidos),
+        'sin_respuesta_24h': one(f'SELECT COUNT(*) FROM fichas_consulta f WHERE {open_base} AND f.pendiente_desde IS NOT NULL AND f.pendiente_desde<=?', [threshold]),
+        'sin_contacto_7_dias': con.execute(
+            f'''SELECT COUNT(*) FROM oportunidades o WHERE o.fusionada_con IS NULL AND o.fecha_seguimiento IS NULL
+                AND o.ultimo_contacto<=? {"AND LOWER(o.responsable)=LOWER(?)" if responsible else ""}
+                AND EXISTS (SELECT 1 FROM fichas_consulta f WHERE f.oportunidad_id=o.id AND {open_base})''',
+            [limit_contact, *([responsible] if responsible else []), *args]).fetchone()[0],
+        'bajo_minimo_abiertas': one(f'SELECT COUNT(*) FROM fichas_consulta f WHERE {open_base} AND f.tipo_consulta IN ({lotes}) AND f.cantidad<?', [lote]),
+    }
+
+    productos = con.execute(page(f'''SELECT COALESCE(NULLIF(TRIM(f.producto),''),'No especificado') AS p, COUNT(*) AS n
+                              FROM fichas_consulta f WHERE {base} AND f.creada_en>=? GROUP BY COALESCE(NULLIF(TRIM(f.producto),''),'No especificado')
+                              ORDER BY n DESC''', 12), [*args, since_iso]).fetchall()
+
+    # Embudo: gestiones creadas en el período, por estado, con montos cotizados por moneda.
+    embudo_rows = con.execute(f'''SELECT f.estado_gestion AS e, f.cotizacion_moneda AS m, COUNT(*) AS n, SUM(f.cotizacion_monto) AS monto
+                                  FROM fichas_consulta f WHERE {base} AND f.creada_en>=? GROUP BY f.estado_gestion, f.cotizacion_moneda''',
+                              [*args, since_iso]).fetchall()
     embudo = []
     for estado in ESTADOS_GESTION:
         if estado == 'resuelta':
             continue
-        group = [c for c in period_cases if c['estado_gestion'] == estado]
-        montos = {}
-        for c in group:
-            if c['cotizacion_monto'] is not None and c['cotizacion_moneda']:
-                montos[c['cotizacion_moneda']] = round(montos.get(c['cotizacion_moneda'], 0) + c['cotizacion_monto'], 2)
-        embudo.append({'estado': estado, 'cantidad': len(group), 'montos': montos})
+        group = [r for r in embudo_rows if r['e'] == estado]
+        montos = {r['m']: round(r['monto'], 2) for r in group if r['m'] and r['monto'] is not None}
+        embudo.append({'estado': estado, 'cantidad': sum(r['n'] for r in group), 'montos': montos})
 
-    # Conversión: gestiones cerradas en el período.
-    closed = [c for c in cases if c['estado_gestion'] in ('concretada', 'no_concretada')
-              and (c['cerrada_en'] or c['actualizada_en'])[:10] >= since_iso]
-
-    def conversion(key):
+    def conversion(column):
+        rows = con.execute(f'''SELECT {column} AS k, f.estado_gestion AS e, COUNT(*) AS n FROM fichas_consulta f
+                               WHERE {base} AND f.estado_gestion IN ('concretada','no_concretada') AND f.cerrada_en>=?
+                               GROUP BY {column}, f.estado_gestion''', [*args, since_iso]).fetchall()
         groups = {}
-        for c in closed:
-            g = groups.setdefault(c[key] or 'sin_dato', {'concretadas': 0, 'no_concretadas': 0})
-            g['concretadas' if c['estado_gestion'] == 'concretada' else 'no_concretadas'] += 1
+        for r in rows:
+            key = canal_base(r['k']) if column == 'f.canal_origen' else r['k']
+            g = groups.setdefault(key or 'sin_dato', {'concretadas': 0, 'no_concretadas': 0})
+            g['concretadas' if r['e'] == 'concretada' else 'no_concretadas'] += r['n']
         for g in groups.values():
             total = g['concretadas'] + g['no_concretadas']
             g['tasa'] = round(100 * g['concretadas'] / total) if total else None
         return groups
 
-    motivos = {}
-    for c in closed:
-        if c['estado_gestion'] == 'no_concretada':
-            motivo = (c['motivo_cierre'] or 'Sin motivo').strip() or 'Sin motivo'
-            motivos[motivo] = motivos.get(motivo, 0) + 1
+    motivos = {(r['k'] or 'Sin motivo'): r['n'] for r in con.execute(
+        f'''SELECT f.motivo_cierre AS k, COUNT(*) AS n FROM fichas_consulta f WHERE {base} AND f.estado_gestion='no_concretada'
+            AND f.cerrada_en>=? GROUP BY f.motivo_cierre''', [*args, since_iso])}
 
     # Tiempo de primera respuesta: gestiones cuyo primer mensaje entró en el período.
-    first = [c for c in cases if c['mensajes'] and any(m.get('direccion', 'entrante') != 'saliente' for m in c['mensajes'])
-             and next(m for m in c['mensajes'] if m.get('direccion', 'entrante') != 'saliente')['recibido_el'][:10] >= since_iso]
-    by_channel, by_user = {}, {}
-    for c in first:
-        by_channel.setdefault(c['canal_origen'] or 'Sin dato', []).append(c['primera_respuesta_horas'])
-        if c['primera_respuesta_horas'] is not None:
-            by_user.setdefault(c['primera_respuesta_usuario'] or 'Sin usuario', []).append(c['primera_respuesta_horas'])
+    first = con.execute(f'''SELECT f.canal_origen, f.primer_entrante_en, f.primera_respuesta_en, f.primera_respuesta_usuario
+                            FROM fichas_consulta f WHERE {base} AND f.primer_entrante_en>=?''', [*args, since_iso]).fetchall()
+    by_channel, by_user, all_hours, answered = {}, {}, [], 0
+    for r in first:
+        t0, t1 = parse_dt(r['primer_entrante_en']), parse_dt(r['primera_respuesta_en'])
+        hours = round((t1 - t0).total_seconds() / 3600, 1) if t0 and t1 else None
+        all_hours.append(hours)
+        by_channel.setdefault(canal_base(r['canal_origen']) or 'Sin dato', []).append(hours)
+        if hours is not None:
+            answered += 1
+            by_user.setdefault(r['primera_respuesta_usuario'] or 'Sin usuario', []).append(hours)
     tiempo = {
-        'promedio_horas': _avg([c['primera_respuesta_horas'] for c in first]),
-        'respondidas': sum(1 for c in first if c['primera_respuesta_horas'] is not None),
-        'sin_respuesta_registrada': sum(1 for c in first if c['primera_respuesta_horas'] is None),
+        'promedio_horas': _avg(all_hours), 'respondidas': answered, 'sin_respuesta_registrada': len(first) - answered,
         'por_canal': {k: {'promedio_horas': _avg(v), 'gestiones': len(v)} for k, v in by_channel.items()},
         'por_vendedor': {k: {'promedio_horas': _avg(v), 'gestiones': len(v)} for k, v in by_user.items()},
     }
 
+    alert_rows = con.execute(page(f'''SELECT f.id, f.codigo, f.cliente, f.responsable, f.pendiente_desde,
+                    CASE WHEN f.oportunidad_id IS NOT NULL THEN f.oportunidad_id ELSE -f.id END AS conv
+                    FROM fichas_consulta f WHERE {open_base} AND f.pendiente_desde IS NOT NULL AND f.pendiente_desde<=?
+                    ORDER BY f.pendiente_desde''', 20), [*args, threshold]).fetchall()
+    alertas = []
+    for r in alert_rows:
+        since = parse_dt(r['pendiente_desde'])
+        alertas.append({'ficha_id': r['id'], 'codigo': r['codigo'], 'cliente': r['cliente'], 'responsable': r['responsable'] or '',
+                        'horas': int((now - since).total_seconds() // 3600) if since else 0, 'conversacion': str(r['conv'])})
+
     return {
         'periodo': period, 'desde': since_iso, 'hasta': today.isoformat(), 'canal': canal,
         'responsable': responsible or 'Todos',
-        'indicadores': {
-            'consultas_recibidas': len(messages),
-            'no_leidas': unread,
-            'sin_atender': sum(1 for c in open_cases if c['estado_gestion'] == 'sin_atender'),
-            'en_gestion': sum(1 for c in open_cases if c['estado_gestion'] != 'sin_atender'),
-            'contactos_activos': len({c['oportunidad_id'] for c in open_cases if c['oportunidad_id']}),
-            'concretadas': count_concretadas(cases, since_iso),
-            'no_concretadas': count_no_concretadas(cases, since_iso),
-            'seguimientos_vencidos': len(vencidos),
-            'sin_respuesta_24h': len(sin_respuesta),
-            'sin_contacto_7_dias': contacts_without_contact(con, cases, responsible),
-            'bajo_minimo_abiertas': sum(1 for c in open_cases if es_bajo_minimo(c['tipo_consulta'], c['cantidad'], minimo)),
-        },
+        'indicadores': indicadores,
         'canales': channel_counts,
-        'productos_consultados': sorted(product_counts.items(), key=lambda x: -x[1])[:12],
+        'productos_consultados': [(r['p'], r['n']) for r in productos],
         'embudo': embudo,
-        'conversion_por_tipo': conversion('tipo_consulta'),
-        'conversion_por_canal': conversion('canal_origen'),
+        'conversion_por_tipo': conversion('f.tipo_consulta'),
+        'conversion_por_canal': conversion('f.canal_origen'),
         'motivos_no_concretadas': motivos,
         'tiempo_primera_respuesta': tiempo,
-        'alertas_sin_respuesta': sin_respuesta[:20],
-        'seguimientos_vencidos_detalle': [{'id': v['id'], 'titulo': v['titulo'], 'inicio': v['inicio'],
-                                           'cliente': v['cliente'], 'ficha_codigo': v['ficha_codigo']} for v in vencidos[:20]],
-        'gestiones_consideradas': len(case_ids),
+        'alertas_sin_respuesta': alertas,
+        'seguimientos_vencidos_detalle': [{'id': v['id'], 'titulo': v['titulo'], 'inicio': v['inicio'], 'cliente': v['cliente'],
+                                           'ficha_codigo': v['ficha_codigo'],
+                                           'conversacion': str(v['conv']) if v['conv'] is not None else ''} for v in vencidos[:20]],
+        'gestiones_consideradas': one(f'SELECT COUNT(*) FROM fichas_consulta f WHERE {base}'),
         'origen_datos': ('Registros actuales de Impulso. Consultas recibidas y cierres usan el período elegido; '
                          'sin atender, en gestión, vencidos y sin respuesta muestran la situación de hoy. '
                          'Las gestiones no comerciales o fusionadas no se cuentan. Los mensajes externos no se '
                          'reciben automáticamente; el tiempo de respuesta se mide con las respuestas registradas en Impulso.'),
     }
+
+
+def page(sql: str, limit: int) -> str:
+    from .escala import page_sql
+    return page_sql(sql, limit, 0)

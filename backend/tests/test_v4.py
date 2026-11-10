@@ -1,6 +1,7 @@
 """V4: IA con contexto completo, fusión, métricas unificadas, pipeline y calificación Pasmanter."""
 from datetime import date, datetime, timedelta, timezone
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -10,6 +11,7 @@ from fastapi.testclient import TestClient
 from app.ai import ConsultaExtraida
 from app.business_v4 import datos_a_confirmar, filtrar_faltantes, norm_name, parse_form_text
 from app.db import connect
+from app.escala import refresh_case_stats
 from app.main import create_app
 
 FORM = ('Solicitud desde el formulario de Pasmanter. Producto: Máscara capilar de 300 ml. '
@@ -141,9 +143,11 @@ def test_merge_script_unifies_demo_duplicates(tmp_path, monkeypatch):
         assert c.post('/api/demo/seed', headers={'X-Session-Token': token}, json={'incluir_web': True}).status_code == 200
     with connect(db) as con:
         before = con.execute("SELECT COUNT(*) FROM fichas_consulta WHERE cliente='Botánica Studio' AND estado_gestion<>'fusionada'").fetchone()[0]
-    assert before == 2
+    assert before >= 2  # V3 demo + mensaje histórico (+ contacto histórico con su gestión)
     script = Path(__file__).resolve().parents[1] / 'scripts' / 'fusionar_demo.py'
-    out = subprocess.run([sys.executable, str(script), '--db', str(db), '--aplicar'], capture_output=True, text=True)
+    env = {**os.environ, 'PYTHONIOENCODING': 'utf-8'}
+    out = subprocess.run([sys.executable, str(script), '--db', str(db), '--aplicar'], capture_output=True, text=True,
+                         encoding='utf-8', env=env)
     assert out.returncode == 0, out.stderr
     with connect(db) as con:
         names = [norm_name(r['cliente']) for r in con.execute(
@@ -154,8 +158,9 @@ def test_merge_script_unifies_demo_duplicates(tmp_path, monkeypatch):
         botanica = con.execute("SELECT id FROM fichas_consulta WHERE cliente='Botánica Studio' AND estado_gestion<>'fusionada'").fetchall()
         assert len(botanica) == 1
         assert con.execute('SELECT COUNT(*) FROM bandeja_consultas WHERE ficha_id=?', (botanica[0]['id'],)).fetchone()[0] == 4
-    second = subprocess.run([sys.executable, str(script), '--db', str(db), '--aplicar'], capture_output=True, text=True)
-    assert 'Gestiones a fusionar: 0' in second.stdout and 'Contactos a unificar: 0' in second.stdout
+    second = subprocess.run([sys.executable, str(script), '--db', str(db), '--aplicar'], capture_output=True, text=True,
+                            encoding='utf-8', env=env)
+    assert 'Gestiones a fusionar: 0' in second.stdout and 'Contactos a unificar (antes de fusionar gestiones): 0' in second.stdout
 
 
 # --------------------------------------------------------------------------- 1.3
@@ -266,6 +271,7 @@ def test_reply_registers_outgoing_and_response_time(tmp_path):
         old = (datetime.now(timezone.utc) - timedelta(hours=30)).isoformat(timespec='seconds')
         with connect(db) as con:
             con.execute('UPDATE bandeja_consultas SET recibido_el=? WHERE id=?', (old, m['id']))
+            refresh_case_stats(con, [m['ficha_id']])  # escritura directa en la base: se refrescan los resúmenes
         report = c.get('/api/reports/summary?period=todos').json()
         assert any(a['ficha_id'] == m['ficha_id'] for a in report['alertas_sin_respuesta'])
         thread = next(t for t in c.get('/api/inbox/threads').json() if t['gestion'] and t['gestion']['id'] == m['ficha_id'])

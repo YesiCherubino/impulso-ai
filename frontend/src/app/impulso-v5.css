@@ -77,8 +77,11 @@ html[data-theme='dark'] .v2-office .v4-message-bubble.is-outgoing{background:var
 .v2-stat.is-alert{border-color:var(--v5-danger-ink)}
 .v2-stat.is-alert strong{color:var(--v5-danger-ink)}
 .v5-source{font-size:12px;margin:14px 0 0}
-.v5-report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;padding:20px;margin-top:18px}
-.v5-report-block{display:grid;gap:10px;align-content:start;min-width:0;overflow-x:auto}
+.v5-report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:18px;padding:20px;margin-top:18px}
+.v5-report-block{display:grid;gap:10px;align-content:start;min-width:0}
+/* Las tablas se desplazan dentro de su contenedor; los títulos nunca se cortan. */
+.v5-table-wrap{overflow-x:auto;min-width:0}
+.v5-mini-table th{white-space:nowrap}
 .v5-report-block.is-wide{grid-column:1/-1}
 .v5-report-block h3{display:flex;align-items:center;gap:8px;margin:0;font-size:15px}
 .v5-big{font-size:28px;font-weight:650;margin:0;color:var(--v3-ink)}
@@ -86,7 +89,11 @@ html[data-theme='dark'] .v2-office .v4-message-bubble.is-outgoing{background:var
 .v5-mini-table th,.v5-mini-table td{padding:7px 8px;border-bottom:1px solid var(--v3-border);text-align:left}
 .v5-mini-table th{color:var(--v3-muted);font-weight:500;font-size:11.5px}
 .v5-alert-list{list-style:none;margin:0;padding:0;display:grid;gap:7px;font-size:13px}
-.v5-alert-list li{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:8px 10px;border-radius:7px;background:var(--v5-warn-bg);color:var(--v5-warn-ink)}
+.v5-alert-list li{border-radius:7px;background:var(--v5-warn-bg);color:var(--v5-warn-ink)}
+.v5-alert-list li a{display:flex;align-items:center;gap:7px;padding:8px 10px;color:inherit;text-decoration:none}
+.v5-alert-list li a span{flex:1;min-width:0}
+.v5-alert-list li a:hover{text-decoration:underline}
+.v5-alert-foot{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .v5-alert-list a{color:inherit;text-decoration:underline}
 .v5-reason-bars{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:13px}
 .v5-reason-bars li{display:flex;justify-content:space-between;gap:10px;padding:7px 10px;border:1px solid var(--v3-border);border-radius:7px}
@@ -103,3 +110,47 @@ html[data-theme='dark'] .v2-office .v4-message-bubble.is-outgoing{background:var
 
 /* El título del mes ya llega con mayúscula inicial ("Noviembre de 2026"); capitalize ponía "De" en mayúscula. */
 .v2-office .v3-agenda-nav strong{text-transform:none}
+
+/* Listados paginados */
+.v5-list-meta{padding:8px 18px;font-size:12px;color:var(--v3-muted);border-bottom:1px solid var(--v3-border)}
+.v5-load-more{display:flex;align-items:center;justify-content:center;gap:7px;margin:14px auto;min-width:200px}
+.v3-board-column .v5-load-more{margin:6px 0 0;width:100%;min-width:0}
+.v5-spin{animation:v5-spin 1s linear infinite}
+@keyframes v5-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.v5-spin{animation:none}}
+.v5-center{display:flex;align-items:center;justify-content:center;gap:8px;color:var(--v3-muted)}
+.v5-older{align-self:center}
+.v5-popover-down{top:calc(100% + 6px)!important;bottom:auto!important;right:0;left:auto}
+.v5-dup-list{margin:6px 0 0;padding-left:18px;font-size:12.5px;display:grid;gap:3px}
+
+/* Compositor tipo chat */
+.v5-composer{flex-shrink:0;border-top:1px solid var(--v3-border);background:var(--v3-panel);padding:10px 16px 8px;display:grid;gap:7px}
+.v5-composer-top{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
+.v5-reply-to{font-size:11.5px;color:var(--v3-muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v5-reply-to em{font-style:normal;color:var(--v3-ink)}
+.v5-channel{flex-shrink:0}
+.v5-channel button{padding:4px 10px;font-size:11.5px}
+.v5-composer-row{display:flex;align-items:flex-end;gap:8px}
+.v5-composer-row textarea{flex:1;min-width:0;resize:none;min-height:44px;max-height:220px;border:1px solid var(--v3-border);border-radius:20px;padding:11px 15px;font:inherit;font-size:13.5px;line-height:1.45;background:var(--v3-panel-alt);color:var(--v3-ink)}
+.v5-composer-row textarea:focus{outline:2px solid var(--v3-accent);outline-offset:0;background:var(--v3-panel)}
+.v5-ai-wrap{position:relative;flex-shrink:0}
+.v5-ai-button{width:44px;height:44px;border-radius:50%;border:1px solid var(--v3-border);background:var(--v3-panel-alt);color:var(--v3-accent);display:grid;place-items:center;cursor:pointer}
+.v5-ai-button:hover:not(:disabled){background:var(--v5-info-bg)}
+.v5-ai-button:disabled{opacity:.6;cursor:default}
+.v5-ai-menu{position:absolute;bottom:calc(100% + 8px);left:0;z-index:70;min-width:290px;background:var(--v3-panel);border:1px solid var(--v3-border);border-radius:10px;box-shadow:0 15px 40px rgba(0,0,0,.17);padding:6px}
+.v5-register{flex-shrink:0;min-height:44px;border-radius:22px;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.v5-composer-hint{font-size:10.5px;color:var(--v3-muted);line-height:1.4}
+@media(max-width:720px){
+ .v5-composer{padding:8px 10px 6px}
+ .v5-composer-top{flex-wrap:wrap}
+ .v5-hide-mobile{display:none}
+ .v2-office .v5-register{width:44px;padding:0;justify-content:center;gap:0}
+ .v5-composer-hint{display:none}
+ .v4-chat-header .v4-chat-avatar{display:none}
+ .v4-chat-person{min-width:0;flex:1}
+ .v4-chat-person h2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .v4-chat-person small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .v4-chat-header .btn-sm{padding:6px 8px}
+}
+
+.v5-amount{display:block;white-space:nowrap}

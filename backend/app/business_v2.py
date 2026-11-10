@@ -249,7 +249,9 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
               VALUES (?,?,?,?,?,'nueva',?,?,?,?)''',
               (payload.cliente.strip(),payload.contacto.strip(),payload.canal,payload.texto.strip(),received,email,phone,payload.asunto.strip(),ficha))
             from .business_v4 import apply_form_fields
+            from .escala import touch_messages
             apply_form_fields(con,cur.lastrowid)
+            touch_messages(con,cur.lastrowid)
             row=con.execute('SELECT * FROM bandeja_consultas WHERE id=?',(cur.lastrowid,)).fetchone()
             return dict(row)
 
@@ -263,24 +265,24 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
             updated=con.execute('UPDATE bandeja_consultas SET leido_en=? WHERE id=?',
                                 (stamp() if read else None,message_id))
             if not updated.rowcount:raise HTTPException(404,'Mensaje no encontrado')
+            from .escala import touch_messages
+            touch_messages(con,message_id)
             return dict(con.execute('SELECT * FROM bandeja_consultas WHERE id=?',(message_id,)).fetchone())
 
     @app.get('/api/fichas')
     def list_fichas(request:Request):
         current(request,db_path)
-        from .business_v4 import lote_minimo
-        from .metrics import load_cases
+        from .business_v4 import lote_minimo,canal_base
+        from .escala import response_from_row
         with connect(db_path) as con:
             # Las gestiones fusionadas no se listan: sus mensajes ya están en la gestión de destino.
             rows=con.execute('''SELECT f.*,COUNT(b.id) AS mensajes,COUNT(b.id) AS mensajes_count FROM fichas_consulta f LEFT JOIN bandeja_consultas b
                          ON b.ficha_id=f.id WHERE f.estado_gestion<>'fusionada' GROUP BY f.id ORDER BY f.actualizada_en DESC,f.id DESC''').fetchall()
             minimo=lote_minimo(con)
-            info={c['id']:c for c in load_cases(con,include_non_commercial=True)}
             out=[]
             for r in rows:
                 item=row_ficha(r,minimo)
-                c=info.get(r['id'])
-                if c:item.update({'canal_origen':c['canal_origen'],'respuesta':c['respuesta']})
+                item.update({'canal_origen':canal_base(r['canal_origen']),'respuesta':response_from_row(r)})
                 out.append(item)
             return out
 
@@ -341,6 +343,8 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
             con.execute('UPDATE bandeja_consultas SET ficha_id=?,oportunidad_id=? WHERE id=?',(to,opp,message_id))
             con.execute('UPDATE fichas_consulta SET actualizada_en=? WHERE id IN (?,?)',
                         (stamp(),to,row['ficha_id']))
+            from .escala import refresh_case_stats
+            refresh_case_stats(con,[to,row['ficha_id']])
             return dict(con.execute('SELECT * FROM bandeja_consultas WHERE id=?',(message_id,)).fetchone())
 
     @app.post('/api/fichas/{ficha_id}/save-contact')
