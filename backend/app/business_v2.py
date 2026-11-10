@@ -35,7 +35,8 @@ def current(request: Request, db_path: Path, *roles: str):
         if roles:
             raise HTTPException(403, 'Esta funcionalidad requiere iniciar sesión')
         return None
-    user = auth.get_user(db_path, request.headers.get('x-session-token', ''))
+    from .permisos import apply_view_as
+    user = apply_view_as(auth.get_user(db_path, request.headers.get('x-session-token', '')), request.headers.get('x-ver-como'))
     if not user:
         raise HTTPException(401, 'Sesión no válida')
     if roles and user['role'] not in roles:
@@ -47,6 +48,8 @@ def row_ficha(row, minimo=None):
     from .business_v4 import ficha_extras, LOTE_MINIMO_DEFAULT
     data = {**dict(row), 'requisitos': json.loads(row['requisitos_json'] or '[]'),
             'datos_faltantes': json.loads(row['datos_faltantes_json'] or '[]')}
+    if 'etapas_json' in data:
+        data['etapas'] = json.loads(data.pop('etapas_json') or '[]')
     if 'campos_editados_json' in data:
         data.update(ficha_extras(row, minimo or LOTE_MINIMO_DEFAULT))
     return data
@@ -112,7 +115,7 @@ class NewMessage(BaseModel):
     asunto: str = Field(default='',max_length=250)
 
 
-TipoConsultaFicha = Literal['sin_clasificar','fabricacion_terceros','desarrollo_formula','elaboracion_envasado',
+TipoConsultaFicha = Literal['sin_clasificar','fabricacion_terceros', 'produccion_terceros', 'otros_servicios', 'desarrollo_formula','elaboracion_envasado',
                            'mayorista','exportacion','no_comercial','otro']
 SiNoFicha = Literal['si','no','sin_especificar']
 
@@ -139,6 +142,11 @@ class FichaEdit(BaseModel):
     localidad: str|None = Field(default=None,max_length=120)
     origen: Literal['manual','ia'] = 'manual'
     confirmar_tipo: bool = False
+    # V6: datos del rubro de Pasmanter.
+    rubro: str|None = Field(default=None,max_length=60)
+    envase: str|None = Field(default=None,max_length=60)
+    tipo_cliente: str|None = Field(default=None,max_length=60)
+    etapas: list[str]|None = Field(default=None,max_length=15)
 
 
 class ContactSave(FichaEdit):
@@ -229,7 +237,7 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
     @app.post('/api/inbox/new',status_code=201)
     def create_message(request:Request,payload:NewMessage):
         user=current(request,db_path)
-        if user and user['role']=='gerencia':raise HTTPException(403,'Gerencia tiene acceso de solo lectura')
+        from .permisos import require as _req; _req(db_path,user,'responder')
         received=stamp()
         email=sender_email(payload.email_remitente)
         phone=sender_phone(payload.telefono_remitente)
@@ -258,7 +266,7 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
     @app.post('/api/inbox/{message_id}/read')
     def mark_read(message_id:int,request:Request,payload:dict):
         user=current(request,db_path)
-        if user and user['role']=='gerencia':raise HTTPException(403,'Gerencia solo consulta')
+        from .permisos import require as _req; _req(db_path,user,'responder')
         read=payload.get('read')
         if not isinstance(read,bool):raise HTTPException(422,'El campo read debe ser booleano')
         with connect(db_path) as con:
@@ -300,7 +308,7 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
     @app.post('/api/fichas/{ficha_id}/edit')
     def edit_ficha(ficha_id:int,request:Request,payload:FichaEdit):
         user=current(request,db_path)
-        if user and user['role']=='gerencia':raise HTTPException(403,'Gerencia solo consulta')
+        from .permisos import require as _req; _req(db_path,user,'gestionar')
         from .business_v4 import lote_minimo
         with connect(db_path) as con:
             old=con.execute('SELECT * FROM fichas_consulta WHERE id=?',(ficha_id,)).fetchone()
@@ -309,7 +317,9 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
                     'cantidad':payload.cantidad,'tipo_consulta':payload.tipo_consulta,'presentacion':payload.presentacion,
                     'packaging':payload.packaging}
             extra=payload.model_dump(include={'formula','marca_registrada','registro_anmat','destino','pais_destino',
-                                              'plazo_deseado','localidad'},exclude_none=True)
+                                              'plazo_deseado','localidad','rubro','envase','tipo_cliente'},exclude_none=True)
+            if payload.etapas is not None and 'etapas_json' in old.keys():
+                extra['etapas_json']=json.dumps([e.strip() for e in payload.etapas if e.strip()],ensure_ascii=False)
             values.update({k:(v.strip() if isinstance(v,str) else v) for k,v in extra.items()})
             # Los campos cambiados a mano quedan protegidos: la IA no los vuelve a pisar.
             editados=set(json.loads(old['campos_editados_json'] or '[]'))
@@ -330,7 +340,7 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
     @app.post('/api/inbox/{message_id}/move')
     def move_message(message_id:int,request:Request,payload:MoveMessage):
         user=current(request,db_path)
-        if user and user['role']=='gerencia':raise HTTPException(403,'Gerencia solo consulta')
+        from .permisos import require as _req; _req(db_path,user,'gestionar')
         with connect(db_path) as con:
             row=con.execute('SELECT * FROM bandeja_consultas WHERE id=?',(message_id,)).fetchone()
             if not row:raise HTTPException(404,'Mensaje no encontrado')
@@ -351,7 +361,7 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
     @app.post('/api/fichas/{ficha_id}/save-contact')
     def save_contact(ficha_id:int,request:Request,payload:ContactSave):
         user=current(request,db_path)
-        if user and user['role']=='gerencia':raise HTTPException(403,'Gerencia solo consulta')
+        from .permisos import require as _req; _req(db_path,user,'contactos')
         now=date.today().isoformat()
         with connect(db_path) as con:
             ficha=con.execute('SELECT * FROM fichas_consulta WHERE id=?',(ficha_id,)).fetchone()
@@ -408,7 +418,7 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
     @app.post('/api/opportunities/{id_}/profile')
     def update_contact(id_:int,request:Request,payload:dict):
         user=current(request,db_path)
-        if user and user['role']=='gerencia':raise HTTPException(403,'Gerencia solo consulta')
+        from .permisos import require as _req; _req(db_path,user,'contactos')
         allowed={'cliente':120,'contacto':120,'email':200,'telefono':50,'producto':150,'notas':3000}
         data={k:str(v).strip() for k,v in payload.items() if k in allowed and isinstance(v,str)}
         if any(len(v)>allowed[k] for k,v in data.items()):raise HTTPException(422,'Campo demasiado largo')
@@ -431,9 +441,10 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
 
     @app.post('/api/reports/chat')
     def chat_report(request:Request,payload:ReportRequest):
-        current(request,db_path,'administrador','gerencia')
+        user=current(request,db_path)
+        from .permisos import require as _req; _req(db_path,user,'reporte_ia')
         with connect(db_path) as con:
-            data=report_data(con,period=payload.period,canal=payload.channel,responsable=payload.responsable)
+            data=report_data(con,period=payload.period,canal=payload.channel,responsable=payload.responsable,user=user)
         # La IA solo recibe agregados permitidos; nunca ejecuta SQL arbitrario.
         reserve_ai_call()
         try:
@@ -457,7 +468,8 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
 
     @app.post('/api/reports/pdf')
     def export_pdf(request:Request,payload:PdfRequest):
-        current(request,db_path,'administrador','gerencia')
+        _u=current(request,db_path)
+        from .permisos import require as _req; _req(db_path,_u,'reporte_ia')
         # Generación local de PDF; sin URLs ni contenido activo.
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import getSampleStyleSheet,ParagraphStyle

@@ -4,7 +4,8 @@ import {X,Plus,Trash2,Search,FileDown,Loader2,Receipt} from 'lucide-react';
 import {api,qs,ArchivoB64,abrirArchivo,Producto,Empresa,FichaConsulta,cotizacionTexto} from '@/lib/api';
 
 type Item={producto_id:number|null;codigo:string;descripcion:string;unidad:string;cantidad:string;precio_unitario:string;descuento_pct:string};
-type Cotizacion={id:number;numero:string;fecha:string;moneda:string;total:number;items:{descripcion:string}[]};
+type Cotizacion={id:number;numero:string;fecha:string;moneda:string;total:number;token?:string;aceptada_en?:string|null;items:{descripcion:string}[]};
+const enlace=(token:string)=>`${window.location.origin}/c/${token}`;
 const fmt=(n:number,m:string)=>`${m} ${n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 const num=(s:string)=>{const n=Number(String(s).replace(',','.'));return Number.isFinite(n)?n:0};
 
@@ -23,17 +24,23 @@ export default function QuoteDialog({fichaId,onClose,onSaved}:{fichaId:number;on
  function add(p:Producto){setItems(old=>{const blank=old.length===1&&!old[0].precio_unitario&&!old[0].producto_id;const item={producto_id:p.id,codigo:p.codigo,descripcion:p.descripcion,unidad:p.unidad,cantidad:blank?old[0].cantidad:'1',precio_unitario:p.precio!=null?String(p.precio):'',descuento_pct:''};return blank?[item]:[...old,item]});if(p.moneda!==moneda&&items.every(i=>!i.precio_unitario))setMoneda(p.moneda);setQ('')}
  const valid=items.length>0&&items.every(i=>i.descripcion.trim()&&num(i.cantidad)>0&&i.precio_unitario!=='');
  async function save(){setBusy(true);setError('');try{
-  const r=await api<{id:number;numero:string;total:number;moneda:string}>(`/api/fichas/${fichaId}/cotizaciones`,{method:'POST',body:JSON.stringify({moneda,validez_dias:Number(validez)||30,incluye_iva:iva,iva_pct:totals.pct,condiciones,notas,
+  const r=await api<{id:number;numero:string;total:number;moneda:string;token?:string}>(`/api/fichas/${fichaId}/cotizaciones`,{method:'POST',body:JSON.stringify({moneda,validez_dias:Number(validez)||30,incluye_iva:iva,iva_pct:totals.pct,condiciones,notas,
    items:items.map(i=>({producto_id:i.producto_id,codigo:i.codigo,descripcion:i.descripcion.trim(),unidad:i.unidad||'unidad',cantidad:num(i.cantidad),precio_unitario:num(i.precio_unitario),descuento_pct:num(i.descuento_pct)}))})});
-  abrirArchivo(await api<ArchivoB64>(`/api/cotizaciones/${r.id}/pdf`));
-  onSaved?.(`Cotización ${r.numero} generada`);onClose();
+  setDone({id:r.id,numero:r.numero,token:r.token||'',total:r.total,moneda:r.moneda});onSaved?.(`Cotización ${r.numero} generada`);
  }catch(e){setError(e instanceof Error?e.message:'No se pudo generar la cotización')}finally{setBusy(false)}}
+ const [done,setDone]=useState<{id:number;numero:string;token:string;total:number;moneda:string}|null>(null),[copied,setCopied]=useState('');
+ async function copy(token:string){try{await navigator.clipboard.writeText(enlace(token));setCopied(token)}catch{setError('No se pudo copiar el enlace')}}
  async function reopen(id:number){try{abrirArchivo(await api<ArchivoB64>(`/api/cotizaciones/${id}/pdf`))}catch(e){setError(String(e))}}
  const mixed=results.length>0&&results.some(r=>r.moneda!==moneda);
  return <div className="modal-backdrop v2-overlay v5-front" onMouseDown={onClose}><div className="modal v6-quote" role="dialog" aria-modal="true" aria-label="Cotizador" onMouseDown={e=>e.stopPropagation()}>
   <header className="v3-dialog-head"><div><small>{ficha?.codigo}</small><h2>Nueva cotización</h2><p>{ficha?`${ficha.cliente}${ficha.contacto?` · ${ficha.contacto}`:''}`:'Cargando…'}</p></div><button className="icon-button" onClick={onClose} aria-label="Cerrar"><X/></button></header>
-  <div className="v3-dialog-body">
-   {!!previas.length&&<div className="v6-prev"><small>Cotizaciones anteriores:</small>{previas.map(p=><button key={p.id} type="button" className="v5-chip" onClick={()=>void reopen(p.id)} title="Abrir PDF"><FileDown size={11}/> {p.numero} · {fmt(p.total,p.moneda)}</button>)}</div>}
+  {done?<div className="v3-dialog-body v7-quote-done">
+   <strong>Cotización {done.numero} · {fmt(done.total,done.moneda)}</strong>
+   <p className="muted">La gestión quedó en Cotizada. Mandale al cliente el PDF o el enlace para que la acepte online.</p>
+   {done.token&&<div className="v7-link"><input readOnly value={enlace(done.token)} aria-label="Enlace para el cliente" onFocus={e=>e.target.select()}/><button type="button" className="btn btn-primary" onClick={()=>void copy(done.token)}>{copied===done.token?'Copiado':'Copiar enlace'}</button></div>}
+   <div className="v6-actions"><button type="button" className="btn btn-outline" onClick={()=>void reopen(done.id)}><FileDown size={16}/> Abrir PDF</button><button type="button" className="btn btn-outline" onClick={onClose}>Listo</button></div>
+  </div>:<div className="v3-dialog-body">
+   {!!previas.length&&<div className="v6-prev"><small>Cotizaciones anteriores:</small>{previas.map(p=><span key={p.id} className="v7-prev-item"><button type="button" className="v5-chip" onClick={()=>void reopen(p.id)} title="Abrir PDF"><FileDown size={11}/> {p.numero} · {fmt(p.total,p.moneda)}{p.aceptada_en?' · aceptada':''}</button>{p.token&&<button type="button" className="v5-chip" onClick={()=>void copy(p.token!)}>{copied===p.token?'Copiado':'Copiar enlace'}</button>}</span>)}</div>}
    <div className="v6-quote-top">
     <label className="search v6-product-search"><Search size={16}/><input placeholder="Buscar en la lista de precios (código, producto o línea)" value={q} onChange={e=>setQ(e.target.value)}/></label>
     <select aria-label="Moneda" value={moneda} onChange={e=>setMoneda(e.target.value as 'ARS'|'USD')}><option value="ARS">Pesos (ARS)</option><option value="USD">Dólares (USD)</option></select>
@@ -59,6 +66,6 @@ export default function QuoteDialog({fichaId,onClose,onSaved}:{fichaId:number;on
    </div>
    {error&&<p className="alert error" role="alert">{error}</p>}
    <div className="v6-actions"><small className="muted">La gestión pasa a Cotizada con este total.</small><button type="button" className="btn btn-outline" onClick={onClose}>Cancelar</button><button type="button" className="btn btn-primary" disabled={busy||!valid} onClick={()=>void save()}>{busy?<Loader2 size={16} className="v5-spin"/>:<FileDown size={16}/>} Generar PDF</button></div>
-  </div>
+  </div>}
  </div></div>;
 }

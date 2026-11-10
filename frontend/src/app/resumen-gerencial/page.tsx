@@ -1,53 +1,53 @@
 'use client';
 import {useCallback,useEffect,useState} from 'react';
-import {FileDown,MessageCircle,Send,FileText,AlertTriangle,Clock3,ArrowUpRight} from 'lucide-react';
+import {FileDown,Send,X} from 'lucide-react';
 import Link from 'next/link';
 import Shell from '@/components/shell';
 import ExportButton from '@/components/export-button';
-import GoalsReport from '@/components/goals-report';
-import {api,ReportData,ReportResponse,UsuarioSesion,Responsable,ReportBreakdown,estadoGestionNombre,tipoConsultaNombre,TipoConsulta} from '@/lib/api';
-const labels:Record<string,string>={consultas_recibidas:'Consultas recibidas',no_leidas:'No leídas',sin_atender:'Sin atender',en_gestion:'En gestión',contactos_activos:'Contactos activos',concretadas:'Concretadas',no_concretadas:'No concretadas',seguimientos_vencidos:'Seguimientos vencidos',sin_respuesta_24h:'Sin respuesta +24 h',sin_contacto_7_dias:'Sin contacto +7 días'};
-const horas=(h:number|null|undefined)=>{if(h==null)return '—';if(h<24)return `${h.toLocaleString('es-AR')} h`;const d=Math.round(h/24*10)/10;return `${d.toLocaleString('es-AR')} ${d===1?'día':'días'}`};
-const canalNombre=(c:string)=>c==='Correo'?'Email':c||'Sin dato';
-const montos=(m:Record<string,number>)=>{const e=Object.entries(m);return e.length?<>{e.map(([k,v])=><span className="v5-amount" key={k}>{k} {v.toLocaleString('es-AR',{maximumFractionDigits:0})}</span>)}</>:'—'};
-function Breakdown({title,data,name}:{title:string;data?:ReportBreakdown;name:(k:string)=>string}){const rows=Object.entries(data||{});return <div className="v5-report-block"><h3>{title}</h3>{rows.length?<div className="v5-table-wrap"><table className="v5-mini-table"><thead><tr><th></th><th title="Concretadas">Concr.</th><th title="No concretadas">No concr.</th><th title="Conversión">Conv.</th></tr></thead><tbody>{rows.map(([k,v])=><tr key={k}><td>{name(k)}</td><td>{v.concretadas}</td><td>{v.no_concretadas}</td><td>{v.tasa==null?'—':`${v.tasa}%`}</td></tr>)}</tbody></table></div>:<p className="muted">Sin cierres en el período.</p>}</div>}
-const examples=['Prepará un resumen ejecutivo de la actividad comercial del mes.','¿Cuántas consultas recibimos por WhatsApp y por Email?','¿Cuáles fueron los productos más consultados?','Mostrame las operaciones concretadas y no concretadas del período.'];
+import {api,qs,ReportData,ReportResponse,UsuarioSesion,Responsable,estadoGestionNombre,fechaCorta,puede,cotizacionTexto,guardarArchivo} from '@/lib/api';
+
+const TARJETAS:[string,string][]=[['consultas_recibidas','Consultas recibidas'],['sin_atender','Sin atender'],['en_gestion','En gestión'],['concretadas','Concretadas'],['no_concretadas','No concretadas'],['no_leidas','No leídas'],['contactos_activos','Contactos activos'],['seguimientos_vencidos','Seguimientos vencidos'],['sin_contacto_7_dias','Sin contacto +7 días']];
+type Detalle={total:number;items:{ficha_id:number|null;oportunidad_id?:number;codigo:string;cliente:string;titulo:string;estado_gestion:string;responsable:string;fecha:string|null;conversacion:string;monto?:number|null;moneda?:string}[]};
+const examples=['Resumen del mes para gerencia','¿Qué productos se consultaron más?','¿Cómo vienen las cotizaciones?','¿Qué canal trae más consultas?'];
+
+/* Reportes: resumen comercial con el detalle de cada número y, debajo, reportes con IA. */
 export default function Reportes(){
  const [data,setData]=useState<ReportData|null>(null),[period,setPeriod]=useState('mes'),[channel,setChannel]=useState('todos'),[responsable,setResponsable]=useState('');
- const [user,setUser]=useState<UsuarioSesion|null>(null),[prompt,setPrompt]=useState(''),[history,setHistory]=useState<ReportResponse[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState(''),[allAlerts,setAllAlerts]=useState(false),[owners,setOwners]=useState<Responsable[]>([]);
- const ownerName=(u:string)=>owners.find(o=>o.username===u)?.name||u;
- useEffect(()=>{void api<Responsable[]>('/api/users/responsables').then(setOwners).catch(()=>{})},[]);
- const canChat=user?.role==='administrador'||user?.role==='gerencia';
- const load=useCallback(async()=>{try{const query=new URLSearchParams({period,channel,responsable});setData(await api<ReportData>(`/api/reports/summary?${query}`));setError('')}catch(e){setError(e instanceof Error?e.message:'No se pudo cargar el resumen comercial')}},[period,channel,responsable]);
- useEffect(()=>{void load()},[load]);useEffect(()=>{void fetch('/api/session/me').then(r=>r.ok?r.json():null).then(setUser).catch(()=>{})},[]);
- async function ask(e?:React.FormEvent){e?.preventDefault();if(!prompt.trim())return;setBusy(true);setError('');try{const result=await api<ReportResponse>('/api/reports/chat',{method:'POST',body:JSON.stringify({question:prompt,period,channel,responsable})});setHistory(v=>[...v,result]);setPrompt('');await load()}catch(e){setError(e instanceof Error?e.message:'No se pudo generar el reporte')}finally{setBusy(false)}}
- async function pdf(report:ReportResponse){setBusy(true);setError('');try{const file=await api<{pdf_base64:string;filename:string}>('/api/reports/pdf',{method:'POST',body:JSON.stringify({title:report.title,question:report.question,report:report.report,data:report.data})});const binary=atob(file.pdf_base64);const buffer=new ArrayBuffer(binary.length);const bytes=new Uint8Array(buffer);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);const blob=new Blob([buffer],{type:'application/pdf'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=file.filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch(e){setError(e instanceof Error?e.message:'No se pudo generar el PDF')}finally{setBusy(false)}}
- return <Shell><div className="v2-page-head"><div><h1>Reportes</h1></div></div>
- {error&&<div className="alert error" role="alert">{error}<button onClick={()=>setError('')}>Cerrar</button></div>}
- <section className="panel v2-report-summary"><div className="v2-section-header"><h2>Resumen comercial</h2><ExportButton path={`/api/export/reporte?${new URLSearchParams({period,canal:channel,responsable})}`} onError={setError}/></div><div className="v2-inbox-toolbar"><label>Período <select value={period} onChange={e=>setPeriod(e.target.value)}><option value="semana">Últimos 7 días</option><option value="mes">Este mes</option><option value="trimestre">Últimos 90 días</option><option value="todos">Histórico</option></select></label><label>Canal <select value={channel} onChange={e=>setChannel(e.target.value)}><option value="todos">Todos</option><option value="WhatsApp">WhatsApp</option><option value="Correo">Email</option><option value="Formulario web">Formulario web</option></select></label>{user?.role!=='ventas'&&<label>Responsable <input placeholder="Todos los responsables" value={responsable} onChange={e=>setResponsable(e.target.value)}/></label>}</div>
- <div className="v2-stat-grid">{Object.entries(labels).map(([key,label])=><div className={`v2-stat ${(key==='sin_respuesta_24h'||key==='seguimientos_vencidos')&&(data?.indicadores[key]||0)>0?'is-alert':''}`} key={key}><small>{label}</small><strong>{data?.indicadores[key]??'—'}</strong></div>)}</div>{data&&<p className="muted v5-source">{data.origen_datos}</p>}</section>
- {data&&<section className="panel v5-report-grid">
-  <div className="v5-report-block is-wide"><h3><AlertTriangle size={17}/> Alertas</h3>{(()=>{
-   const list=[...(data.alertas_sin_respuesta||[]).map(a=>({key:`r-${a.ficha_id}`,href:`/consultas?conversacion=${a.conversacion}`,icon:<Clock3 size={14}/>,text:<><strong>{a.cliente}</strong> · {a.codigo} · sin respuesta hace {horas(a.horas)}{a.responsable?` · ${ownerName(a.responsable)}`:' · sin asignar'}</>})),
-     ...(data.seguimientos_vencidos_detalle||[]).map(v=>({key:`s-${v.id}`,href:v.conversacion?`/consultas?conversacion=${v.conversacion}`:'/agenda',icon:<AlertTriangle size={14}/>,text:<>Seguimiento vencido: <strong>{v.cliente||v.titulo}</strong>{v.ficha_codigo?` · ${v.ficha_codigo}`:''} · {new Date(v.inicio).toLocaleDateString('es-AR')}</>}))];
-   const totalAlerts=(data.indicadores.sin_respuesta_24h||0)+(data.indicadores.seguimientos_vencidos||0);
-   if(!list.length)return <p className="muted">Sin alertas.</p>;
-   const visible=allAlerts?list:list.slice(0,5);
-   return <><ul className="v5-alert-list">{visible.map(a=><li key={a.key}><Link href={a.href}>{a.icon} <span>{a.text}</span><ArrowUpRight size={14}/></Link></li>)}</ul>
-    <div className="v5-alert-foot"><small className="muted">{totalAlerts.toLocaleString('es-AR')} alertas en total{totalAlerts>list.length?` · se muestran las ${list.length} más urgentes`:''}</small>{list.length>5&&<button type="button" className="v3-text-action" onClick={()=>setAllAlerts(v=>!v)}>{allAlerts?'Ver menos':`Ver todas (${list.length})`}</button>}{data.indicadores.sin_respuesta_24h>0&&<Link className="v3-text-action" href="/consultas">Ir a la bandeja</Link>}</div></>})()}</div>
-  <div className="v5-report-block"><h3>Tiempo de primera respuesta</h3><p className="v5-big">{horas(data.tiempo_primera_respuesta?.promedio_horas)}</p><small className="muted">{data.tiempo_primera_respuesta?.respondidas||0} gestiones respondidas · {data.tiempo_primera_respuesta?.sin_respuesta_registrada||0} sin respuesta registrada</small>
-   <div className="v5-table-wrap"><table className="v5-mini-table"><thead><tr><th>Canal</th><th>Promedio</th><th>Gestiones</th></tr></thead><tbody>{Object.entries(data.tiempo_primera_respuesta?.por_canal||{}).map(([k,v])=><tr key={k}><td>{canalNombre(k)}</td><td>{horas(v.promedio_horas)}</td><td>{v.gestiones}</td></tr>)}</tbody></table></div>
-   {!!Object.keys(data.tiempo_primera_respuesta?.por_vendedor||{}).length&&<div className="v5-table-wrap"><table className="v5-mini-table"><thead><tr><th>Vendedor</th><th>Promedio</th><th>Respondidas</th></tr></thead><tbody>{Object.entries(data.tiempo_primera_respuesta?.por_vendedor||{}).map(([k,v])=><tr key={k}><td>{ownerName(k)}</td><td>{horas(v.promedio_horas)}</td><td>{v.gestiones}</td></tr>)}</tbody></table></div>}</div>
-  <div className="v5-report-block"><h3>Embudo del período</h3><div className="v5-table-wrap"><table className="v5-mini-table"><thead><tr><th>Estado</th><th>Gestiones</th><th>Monto cotizado</th></tr></thead><tbody>{data.embudo?.map(e=><tr key={e.estado}><td>{estadoGestionNombre[e.estado]}</td><td>{e.cantidad}</td><td>{montos(e.montos)}</td></tr>)}</tbody></table></div></div>
-  <Breakdown title="Conversión por tipo de servicio" data={data.conversion_por_tipo} name={k=>tipoConsultaNombre[k as TipoConsulta]||k}/>
-  <Breakdown title="Conversión por canal de origen" data={data.conversion_por_canal} name={canalNombre}/>
-  <div className="v5-report-block"><h3>Motivos de no concretadas</h3>{Object.keys(data.motivos_no_concretadas||{}).length?<ul className="v5-reason-bars">{Object.entries(data.motivos_no_concretadas||{}).sort((a,b)=>b[1]-a[1]).map(([k,v])=><li key={k}><span>{k}</span><strong>{v}</strong></li>)}</ul>:<p className="muted">Sin datos en el período.</p>}</div>
- </section>}
- <GoalsReport user={user}/>
- {canChat&&<section className="panel v2-report-chat"><div className="v2-section-header"><div><h2><MessageCircle size={19} strokeWidth={1.6}/> Asistente de reportes</h2></div><FileText size={22} strokeWidth={1.4}/></div>
- <div className="v2-report-conversation">{history.map((item,i)=><div key={`${item.generated_at}-${i}`} className="v2-report-turn"><div className="v2-question">{item.question}</div><div className="v2-answer"><strong>Informe comercial</strong><p className="v2-report-text">{item.report}</p><button className="btn btn-outline" disabled={busy} onClick={()=>void pdf(item)}><FileDown size={17}/> Exportar a PDF</button></div></div>)}</div>
- <div className="v2-suggestions">{examples.map(q=><button key={q} className="v2-suggest" onClick={()=>setPrompt(q)}>{q}</button>)}</div>
- <form className="v2-report-compose" onSubmit={e=>void ask(e)}><textarea rows={2} maxLength={1000} placeholder="Ej. Prepará un informe de las consultas del mes por canal y estado" value={prompt} onChange={e=>setPrompt(e.target.value)} required/><button type="submit" className="btn btn-primary" disabled={busy||!prompt.trim()}><Send size={17}/>{busy?'Generando...':'Generar reporte'}</button></form></section>}
- {!canChat&&<p className="muted">Disponible para Gerencia y Administración.</p>}
+ const [user,setUser]=useState<UsuarioSesion|null>(null),[owners,setOwners]=useState<Responsable[]>([]),[error,setError]=useState('');
+ const [open,setOpen]=useState<[string,string]|null>(null),[detalle,setDetalle]=useState<Detalle|null>(null);
+ const [prompt,setPrompt]=useState(''),[history,setHistory]=useState<ReportResponse[]>([]),[busy,setBusy]=useState(false);
+ const todos=puede(user,'reportes_todos');
+ const ownerName=(u:string)=>owners.find(o=>o.username===u)?.name||u||'Sin asignar';
+ useEffect(()=>{void fetch('/api/session/me').then(r=>r.ok?r.json():null).then(setUser).catch(()=>{});void api<Responsable[]>('/api/users/responsables').then(setOwners).catch(()=>{})},[]);
+ const params={period,channel,responsable:todos?responsable:''};
+ const load=useCallback(async()=>{try{setData(await api<ReportData>(`/api/reports/summary?${qs({period,channel,responsable:todos?responsable:''})}`));setError('')}catch(e){setError(e instanceof Error?e.message:'No se pudo cargar')}},[period,channel,responsable,todos]);
+ useEffect(()=>{void load()},[load]);
+ async function show(t:[string,string]){setOpen(t);setDetalle(null);try{setDetalle(await api<Detalle>(`/api/reports/detalle?${qs({indicador:t[0],...params})}`))}catch(e){setError(String(e));setOpen(null)}}
+ useEffect(()=>{if(!open)return;const k=(e:KeyboardEvent)=>{if(e.key==='Escape')setOpen(null)};window.addEventListener('keydown',k);return()=>window.removeEventListener('keydown',k)},[open]);
+ async function ask(e?:React.FormEvent){e?.preventDefault();if(!prompt.trim())return;setBusy(true);setError('');try{const r=await api<ReportResponse>('/api/reports/chat',{method:'POST',body:JSON.stringify({question:prompt,...params})});setHistory(v=>[r,...v]);setPrompt('')}catch(x){setError(x instanceof Error?x.message:'No se pudo generar el reporte')}finally{setBusy(false)}}
+ async function pdf(r:ReportResponse){setBusy(true);try{const f=await api<{pdf_base64:string;filename:string}>('/api/reports/pdf',{method:'POST',body:JSON.stringify({title:r.title,question:r.question,report:r.report,data:r.data})});guardarArchivo({filename:f.filename,mime:'application/pdf',contenido_base64:f.pdf_base64})}catch(x){setError(String(x))}finally{setBusy(false)}}
+ const href=(i:Detalle['items'][number])=>i.ficha_id?`/consultas?conversacion=${i.conversacion}&ficha=${i.ficha_id}`:i.oportunidad_id?`/oportunidades/${i.oportunidad_id}`:'/agenda';
+ return <Shell>
+  <div className="v2-page-head"><h1>Reportes</h1>{puede(user,'exportar')&&<ExportButton path={`/api/export/reporte?${qs({period,canal:channel,responsable:todos?responsable:''})}`} onError={setError}/>}</div>
+  {error&&<p className="alert error" role="alert">{error}</p>}
+  <section className="panel v7-summary">
+   <div className="v7-filters">
+    <label>Período<select value={period} onChange={e=>setPeriod(e.target.value)}><option value="semana">Últimos 7 días</option><option value="mes">Este mes</option><option value="trimestre">Últimos 90 días</option><option value="todos">Histórico</option></select></label>
+    <label>Canal<select value={channel} onChange={e=>setChannel(e.target.value)}><option value="todos">Todos</option><option value="WhatsApp">WhatsApp</option><option value="Correo">Email</option><option value="Formulario web">Formulario web</option></select></label>
+    {todos?<label>Vendedor<select value={responsable} onChange={e=>setResponsable(e.target.value)}><option value="">Todos</option>{owners.map(o=><option key={o.username} value={o.username}>{o.name}</option>)}</select></label>:user&&<span className="v7-scope">Tus gestiones</span>}
+   </div>
+   <div className="v7-cards">{TARJETAS.map(t=><button type="button" key={t[0]} className="v7-stat" onClick={()=>void show(t)}><small>{t[1]}</small><strong>{data?.indicadores[t[0]]??'—'}</strong></button>)}</div>
+   {data&&<p className="v7-note">{data.origen_datos}</p>}
+  </section>
+  {puede(user,'reporte_ia')&&<section className="panel v7-ai-report"><h2>Reportes con IA</h2>
+   <form className="v7-ask" onSubmit={e=>void ask(e)}><input aria-label="Pedí un reporte" placeholder={todos?'Pedí un reporte: “resumen del mes por vendedor”':'Pedí un reporte sobre tus gestiones'} value={prompt} onChange={e=>setPrompt(e.target.value)} maxLength={1000}/><button type="submit" className="btn btn-primary" disabled={busy||!prompt.trim()}><Send size={15}/> {busy?'Generando…':'Generar'}</button></form>
+   {!history.length&&<div className="v7-chips">{examples.map(q=><button key={q} type="button" onClick={()=>setPrompt(q)}>{q}</button>)}</div>}
+   {history.map((r,i)=><article key={`${r.generated_at}-${i}`} className="v7-report"><header><strong>{r.question}</strong><button className="btn btn-outline btn-sm" disabled={busy} onClick={()=>void pdf(r)}><FileDown size={14}/> PDF</button></header><p>{r.report}</p></article>)}
+  </section>}
+  {open&&<div className="modal-backdrop v2-overlay" onMouseDown={()=>setOpen(null)}><div className="modal v7-detail" role="dialog" aria-modal="true" aria-label={open[1]} onMouseDown={e=>e.stopPropagation()}>
+   <div className="modal-head"><h2>{open[1]}{detalle?<small> · {detalle.total}</small>:null}</h2><button className="icon-button" aria-label="Cerrar" onClick={()=>setOpen(null)}><X size={18}/></button></div>
+   {!detalle?<p className="muted">Cargando…</p>:detalle.items.length?<ul className="v7-detail-list">{detalle.items.map((i,n)=><li key={n}><Link href={href(i)}><span className="v7-what"><strong>{i.cliente}</strong><small>{[i.codigo,i.titulo].filter(Boolean).join(' · ')}</small></span><span className="v7-detail-meta">{i.estado_gestion&&<span>{estadoGestionNombre[i.estado_gestion]||i.estado_gestion}</span>}{i.monto!=null&&i.moneda&&<span>{cotizacionTexto(i.monto,i.moneda)}</span>}<span>{ownerName(i.responsable)}</span><span>{fechaCorta(i.fecha)}</span></span></Link></li>)}</ul>:<p className="muted">Sin gestiones.</p>}
+   {detalle&&detalle.total>detalle.items.length&&<p className="v7-note">Se muestran {detalle.items.length} de {detalle.total}.</p>}
+  </div></div>}
  </Shell>;
 }

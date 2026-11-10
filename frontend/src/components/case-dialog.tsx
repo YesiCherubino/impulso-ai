@@ -1,32 +1,36 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {X,Mail,MessageCircle,ArrowRightLeft,AlertTriangle,Sparkles,UserCheck,Archive,Merge,Send,Receipt,Forward} from 'lucide-react';
-import {api,qs,Pagina,FichaConsulta,ConsultaBandeja,TipoConsulta,tiposConsulta,Responsable,UsuarioSesion,cotizacionTexto,unidades,esCerrada,estadoGestionNombre} from '@/lib/api';
+import {api,qs,Pagina,FichaConsulta,ConsultaBandeja,TipoConsulta,tiposConsulta,Responsable,UsuarioSesion,cotizacionTexto,unidades,esCerrada,estadoGestionNombre,puede,RUBROS,ENVASES,TIPOS_CLIENTE,ETAPAS_FULL} from '@/lib/api';
+import {CaseTimeline,ProjectCard,Historial} from '@/components/case-extras';
 import ChecklistEditor from '@/components/checklist-editor';
 import CaseStatusSelect from '@/components/case-status';
 import QuoteDialog from '@/components/quote-dialog';
 type Fields={titulo:string;cliente:string;contacto:string;producto:string;cantidad:string;tipo_consulta:TipoConsulta;presentacion:string;packaging:string;resumen:string;
- formula:string;marca_registrada:string;registro_anmat:string;destino:string;pais_destino:string;plazo_deseado:string;localidad:string};
+ formula:string;marca_registrada:string;registro_anmat:string;destino:string;pais_destino:string;plazo_deseado:string;localidad:string;rubro:string;envase:string;tipo_cliente:string;etapas:string[]};
 const toFields=(f:FichaConsulta):Fields=>({titulo:f.titulo,cliente:f.cliente,contacto:f.contacto,producto:f.producto,cantidad:f.cantidad==null?'':String(f.cantidad),tipo_consulta:f.tipo_consulta,presentacion:f.presentacion,packaging:f.packaging,resumen:f.resumen,
- formula:f.formula||'sin_especificar',marca_registrada:f.marca_registrada||'sin_especificar',registro_anmat:f.registro_anmat||'sin_especificar',destino:f.destino||'',pais_destino:f.pais_destino||'',plazo_deseado:f.plazo_deseado||'',localidad:f.localidad||''});
+ formula:f.formula||'sin_especificar',marca_registrada:f.marca_registrada||'sin_especificar',registro_anmat:f.registro_anmat||'sin_especificar',destino:f.destino||'',pais_destino:f.pais_destino||'',plazo_deseado:f.plazo_deseado||'',localidad:f.localidad||'',rubro:f.rubro||'',envase:f.envase||'',tipo_cliente:f.tipo_cliente||'',etapas:f.etapas||[]});
 export default function CaseDialog({fichaId,onClose,allowMove=false,readOnly=false}:{fichaId:number;onClose:()=>void;allowMove?:boolean;readOnly?:boolean}){
  const [ficha,setFicha]=useState<FichaConsulta|null>(null),[cases,setCases]=useState<FichaConsulta[]>([]),[fields,setFields]=useState<Fields|null>(null),[dirty,setDirty]=useState(false),[saving,setSaving]=useState(''),[error,setError]=useState(''),[moving,setMoving]=useState<number|null>(null),[destination,setDestination]=useState('');
- const [user,setUser]=useState<UsuarioSesion|null>(null),[owners,setOwners]=useState<Responsable[]>([]),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[quote,setQuote]=useState(false);
+ const [user,setUser]=useState<UsuarioSesion|null>(null),[owners,setOwners]=useState<Responsable[]>([]),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[quote,setQuote]=useState(false),[undo,setUndo]=useState<(()=>Promise<void>)|null>(null),[hist,setHist]=useState<Historial|null>(null),[showHist,setShowHist]=useState(false);
  const token=useRef(0);
- const reload=useCallback(async()=>{const f=await api<FichaConsulta>(`/api/fichas/${fichaId}`);setFicha(f);setFields(toFields(f));setDirty(false);return f},[fichaId]);
+ const loadHist=useCallback(()=>{void api<Historial>(`/api/fichas/${fichaId}/historial`).then(setHist).catch(()=>{})},[fichaId]);
+ const reload=useCallback(async()=>{const f=await api<FichaConsulta>(`/api/fichas/${fichaId}`);setFicha(f);setFields(toFields(f));setDirty(false);loadHist();return f},[fichaId,loadHist]);
+ useEffect(()=>{loadHist()},[loadHist]);
  useEffect(()=>{let active=true;void api<FichaConsulta>(`/api/fichas/${fichaId}`).then(async f=>{if(!active)return;setFicha(f);setFields(toFields(f));setDirty(false);
   // Solo las gestiones del mismo contacto (o empresa): no se carga todo el historial.
   const page=await api<Pagina<FichaConsulta>>(`/api/fichas-search?${qs(f.oportunidad_id?{oportunidad_id:f.oportunidad_id,limit:200}:{cliente:f.cliente,limit:200})}`);if(active)setCases(page.items)}).catch(e=>{if(active)setError(String(e))});return()=>{active=false}},[fichaId]);
  useEffect(()=>{void fetch('/api/session/me').then(r=>r.ok?r.json():null).then(setUser).catch(()=>{});void api<Responsable[]>('/api/users/responsables').then(setOwners).catch(()=>{})},[]);
  useEffect(()=>{if(!dirty||!fields||readOnly)return;const timer=window.setTimeout(()=>{const seq=++token.current;setSaving('Guardando…');void api<FichaConsulta>(`/api/fichas/${fichaId}/edit`,{method:'POST',body:JSON.stringify({...fields,cantidad:fields.cantidad?Number(fields.cantidad):null,requisitos:ficha?.requisitos||[],datos_faltantes:ficha?.datos_faltantes||[]})}).then(f=>{if(seq===token.current){setFicha(old=>old?{...old,...f}:f);setDirty(false);setSaving('Guardado')}}).catch(e=>{setError(String(e));setSaving('Error al guardar')})},700);return()=>clearTimeout(timer)},[fields,dirty,readOnly,fichaId,ficha]);
- function patch(name:keyof Fields,value:string){setFields(old=>old?{...old,[name]:value}:old);setDirty(true)}
+ function patch(name:Exclude<keyof Fields,'etapas'>,value:string){setFields(old=>old?{...old,[name]:value}:old);setDirty(true)}
+ function toggleEtapa(e:string){setFields(old=>old?{...old,etapas:old.etapas.includes(e)?old.etapas.filter(x=>x!==e):[...old.etapas,e]}:old);setDirty(true)}
  async function run(action:()=>Promise<unknown>,ok:string){setBusy(true);setError('');try{await action();await reload();setNotice(ok)}catch(e){setError(e instanceof Error?e.message:'No se pudo completar la acción')}finally{setBusy(false)}}
  async function move(messageId:number){setError('');try{await api(`/api/inbox/${messageId}/move`,{method:'POST',body:JSON.stringify({ficha_id:destination?Number(destination):null})});const refreshed=await api<FichaConsulta>(`/api/fichas/${fichaId}`);setFicha(refreshed);setMoving(null)}catch(e){setError(String(e))}}
  const confirmType=()=>run(()=>api(`/api/fichas/${fichaId}/edit`,{method:'POST',body:JSON.stringify({...fields,cantidad:fields?.cantidad?Number(fields.cantidad):null,requisitos:ficha?.requisitos||[],datos_faltantes:ficha?.datos_faltantes||[],confirmar_tipo:true})}),'Tipo de servicio confirmado');
  const assign=(owner:string)=>run(()=>api(`/api/fichas/${fichaId}/responsable`,{method:'POST',body:JSON.stringify({responsable:owner})}),owner?'Responsable asignado':'Responsable quitado');
- const archive=()=>{if(window.confirm('¿Archivar como consulta no comercial? Queda resuelta y no cuenta en los indicadores de ventas.'))void run(()=>api(`/api/fichas/${fichaId}/no-comercial`,{method:'POST'}),'Archivada como no comercial')};
+ const archive=()=>{const prev={tipo_consulta:ficha?.tipo_consulta||'sin_clasificar',estado_gestion:ficha?.estado_gestion||'sin_atender'};void run(()=>api(`/api/fichas/${fichaId}/no-comercial`,{method:'POST'}),'Archivada como no comercial').then(()=>setUndo(()=>()=>run(()=>api(`/api/fichas/${fichaId}/no-comercial/deshacer`,{method:'POST',body:JSON.stringify(prev)}),'Deshecho')))};
  const merge=(other:{id:number;codigo:string})=>{if(window.confirm(`¿Fusionar ${other.codigo} en esta gestión? Sus mensajes, actividades y listas pasan acá. No se borra nada.`))void run(()=>api(`/api/fichas/${other.id}/merge`,{method:'POST',body:JSON.stringify({destino_id:fichaId})}),`${other.codigo} fusionada en esta gestión`)};
- const isAdmin=user?.role==='administrador'||!user;
+ const isAdmin=puede(user,'asignar');
  const ownerName=(u?:string)=>owners.find(o=>o.username===u)?.name||u||'Sin asignar';
  return <div className="modal-backdrop v2-overlay" onMouseDown={onClose}><div className="modal v3-case-dialog" role="dialog" aria-modal="true" aria-label="Información de la consulta" onMouseDown={e=>e.stopPropagation()}>
   <header className="v3-dialog-head"><div><small>{ficha?.codigo}</small><h2>{ficha?.titulo||'Información de la consulta'}</h2><p>{ficha?.cliente}</p></div><button className="icon-button" onClick={onClose} aria-label="Cerrar"><X/></button></header>
@@ -41,12 +45,18 @@ export default function CaseDialog({fichaId,onClose,allowMove=false,readOnly=fal
    </section>
    {ficha.bajo_minimo&&<p className="v5-banner is-warning"><AlertTriangle size={16}/> Bajo mínimo: {unidades(ficha.cantidad)} para un lote mínimo de {unidades(ficha.lote_minimo)}</p>}
    {!readOnly&&!!ficha.duplicados?.length&&<div className="v5-banner is-info"><Merge size={16}/><div><strong>Hay otra gestión abierta de {ficha.cliente}</strong>{ficha.duplicados.map(d=><span key={d.id} className="v5-dup"><span>{d.codigo} · {d.titulo||d.producto||'Gestión'} · {d.mensajes} mensaje{d.mensajes===1?'':'s'}</span><button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={()=>merge(d)}>Fusionar en esta</button></span>)}</div></div>}
-   {notice&&<p className="v3-success" role="status">{notice}</p>}
+   {notice&&<p className="v3-success" role="status">{notice}{undo&&<button type="button" className="v7-undo" onClick={()=>{const u=undo;setUndo(null);void u()}}>Deshacer</button>}</p>}
+   {hist&&<CaseTimeline data={hist} open={showHist} onToggle={()=>setShowHist(v=>!v)} ownerName={ownerName}/>}
+   <ProjectCard ficha={ficha} etapas={fields.etapas}/>
    <section><h3>Consulta original</h3><div className="v3-original">{ficha.mensajes?.find(m=>m.direccion!=='saliente')?.texto||'Sin mensaje original registrado.'}</div></section>
    <section><div className="v3-section-line"><h3>Calificación de la consulta</h3><span className="v3-saving">{saving}</span></div><div className="v3-fields">
     <label>Título de la gestión<input value={fields.titulo} onChange={e=>patch('titulo',e.target.value)} disabled={readOnly}/></label>
     <label><span className="v5-label-row">Tipo de servicio{!!ficha.tipo_sugerido_ia&&<span className="v5-chip is-ai"><Sparkles size={12}/> Sugerido por IA</span>}</span><select value={fields.tipo_consulta} onChange={e=>patch('tipo_consulta',e.target.value)} disabled={readOnly}>{tiposConsulta.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select>{!!ficha.tipo_sugerido_ia&&!readOnly&&<button type="button" className="v3-text-action" onClick={()=>void confirmType()} disabled={busy}>Confirmar tipo</button>}</label>
     <label>Producto o servicio<input value={fields.producto} onChange={e=>patch('producto',e.target.value)} disabled={readOnly}/></label>
+    <label>Tipo de cliente<select value={fields.tipo_cliente} onChange={e=>patch('tipo_cliente',e.target.value)} disabled={readOnly}><option value="">Sin especificar</option>{TIPOS_CLIENTE.map(t=><option key={t}>{t}</option>)}</select></label>
+    <label>Rubro<select value={fields.rubro} onChange={e=>patch('rubro',e.target.value)} disabled={readOnly}><option value="">Sin especificar</option>{RUBROS.map(t=><option key={t}>{t}</option>)}</select></label>
+    <label>Envase<select value={fields.envase} onChange={e=>patch('envase',e.target.value)} disabled={readOnly}><option value="">Sin especificar</option>{ENVASES.map(t=><option key={t}>{t}</option>)}</select></label>
+    {fields.tipo_consulta==='fabricacion_terceros'&&<fieldset className="wide v7-etapas"><legend>Etapas que pide el cliente</legend>{ETAPAS_FULL.map(e=><label key={e} className="v3-config-check"><input type="checkbox" checked={fields.etapas.includes(e)} onChange={()=>toggleEtapa(e)} disabled={readOnly}/> {e}</label>)}</fieldset>}
     <label>Cantidad estimada (unidades)<input type="number" min="1" value={fields.cantidad} onChange={e=>patch('cantidad',e.target.value)} disabled={readOnly}/></label>
     <label>Presentación (ml/g)<input value={fields.presentacion} onChange={e=>patch('presentacion',e.target.value)} disabled={readOnly}/></label>
     <label>Fórmula<select value={fields.formula} onChange={e=>patch('formula',e.target.value)} disabled={readOnly}><option value="sin_especificar">Sin especificar</option><option value="propia">Fórmula propia del cliente</option><option value="desarrollo_pasmanter">Desarrollo de Pasmanter</option></select></label>

@@ -1,7 +1,7 @@
-/* Isotipo de Impulso: flecha ascendente. Reemplaza al ícono genérico de "colapsar panel". */
-export default function ImpulsoMark({size=34}:{size?:number}){
- return <svg viewBox="0 0 34 34" width={size} height={size} fill="none" aria-hidden="true" focusable="false">
-  <path d="M7 25.5L14.5 18L19 22.5L27 14.5" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"/>
-  <path d="M20.5 14.5H27V21" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"/>
+/* Isotipo de Impulso: una I inclinada hacia adelante con una estela más corta detrás. */
+export default function ImpulsoMark({size=30,solo=false}:{size?:number;solo?:boolean}){
+ return <svg viewBox="0 0 40 40" width={size} height={size} fill="currentColor" aria-hidden="true" focusable="false">
+  {!solo&&<polygon points="5,34 11,34 16,18 10,18" opacity="0.45"/>}
+  <polygon points="15,34 22,34 31,6 24,6"/>
  </svg>;
 }

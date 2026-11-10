@@ -199,6 +199,8 @@ def _me(request, db_path) -> str:
     user = current(request, db_path)
     if not user:
         raise HTTPException(403, 'El chat del equipo requiere iniciar sesión')
+    from .permisos import require
+    require(db_path, user, 'chat')
     return user['username']
 
 
@@ -322,3 +324,17 @@ def register_equipo(app: FastAPI, db_path: Path):
             con.execute('UPDATE empresa_config SET chat_retencion_dias=? WHERE id=1', (payload.dias,))
             purge(con, force=True)
             return {'dias': payload.dias}
+
+
+def announce_close(con, ficha_id: int, usuario: str) -> None:
+    """Cierre en #ventas: aviso automático cuando una gestión pasa a Concretada."""
+    if not usuario:
+        return
+    f = con.execute('SELECT codigo, cliente, cotizacion_monto, cotizacion_moneda FROM fichas_consulta WHERE id=?', (ficha_id,)).fetchone()
+    canal = con.execute("SELECT id FROM chat_canales WHERE clave='ventas'").fetchone()
+    if not f or not canal:
+        return
+    monto = ''
+    if f['cotizacion_monto'] is not None and f['cotizacion_moneda']:
+        monto = f" · {f['cotizacion_moneda']} {f['cotizacion_monto']:,.0f}".replace(',', '.')
+    post(con, canal['id'], usuario, f"Cerré {f['cliente']}{monto}", ficha_id, sistema=True)

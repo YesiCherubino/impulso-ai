@@ -36,8 +36,7 @@ export default function Login(){
   finally{setBusy(false)}
  }
  return <main className="login-screen"><div className="login-theme-control"><ThemeToggle/></div><form className="login-panel" onSubmit={signIn}>
-  <div className="login-brand"><span className="login-mark"><ImpulsoMark size={26}/></span><span><strong>Impulso</strong><small>Gestión comercial</small></span></div>
-  <div className="login-heading"><h1>Iniciar sesión</h1></div>
+  <div className="login-brand"><span className="login-mark"><ImpulsoMark size={30}/></span><strong>Impulso</strong></div>
   <label htmlFor="usuario">Usuario</label>
   <input id="usuario" name="username" autoComplete="username" required maxLength={120} value={username} onChange={e=>{setUsername(e.target.value);if(error)setError('')}}/>
   <label htmlFor="password">Contraseña</label>
@@ -46,6 +45,6 @@ export default function Login(){
    <button type="button" className="password-toggle" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?'Ocultar contraseña':'Mostrar contraseña'} aria-pressed={showPassword} title={showPassword?'Ocultar contraseña':'Mostrar contraseña'}>{showPassword?<EyeOff size={19}/>:<Eye size={19}/>}</button>
   </div>
   {error&&<div className="login-error" role="alert"><AlertCircle size={18} aria-hidden="true"/><span>{error}</span></div>}
-  <button className="login-submit" type="submit" disabled={busy}>{busy?'Ingresando...':'Ingresar'}</button>
+  <button className="login-submit" type="submit" disabled={busy}>{busy?'Ingresando…':'Ingresar'}</button>
  </form></main>
 }

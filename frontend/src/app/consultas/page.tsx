@@ -7,11 +7,11 @@ import CaseDialog from '@/components/case-dialog';
 import CaseStatusSelect from '@/components/case-status';
 import QuoteDialog from '@/components/quote-dialog';
 import ExportButton from '@/components/export-button';
-import {api,qs,ConsultaBandeja,ConsultaIA,Conversacion,ConversacionDetalle,Pagina,Responsable,UsuarioSesion,estadoGestionNombre,tipoConsultaNombre,tiposConsulta,tiempoSinRespuesta,unidades,esCerrada,Plantilla,Documento,Adjunto,NotaInterna,Empresa,ArchivoB64,abrirArchivo,completarPlantilla,tamanoTexto} from '@/lib/api';
+import {api,qs,ConsultaBandeja,ConsultaIA,Conversacion,ConversacionDetalle,Pagina,Responsable,UsuarioSesion,estadoGestionNombre,tipoConsultaNombre,tiposConsulta,tiempoSinRespuesta,unidades,esCerrada,Plantilla,Documento,Adjunto,NotaInterna,Empresa,ArchivoB64,abrirArchivo,completarPlantilla,tamanoTexto,puede,fechaCorta} from '@/lib/api';
 
 const PAGE=50;
 const newBlank={cliente:'',contacto:'',canal:'WhatsApp',texto:'',email_remitente:'',telefono_remitente:'',asunto:''};
-const dt=(s:string)=>new Date(s).toLocaleString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+const dt=(s:string)=>fechaCorta(s);
 const filters=[['todos','Todos'],['WhatsApp','WhatsApp'],['Correo','Email'],['Formulario web','Formulario web']];
 const isOut=(m:ConsultaBandeja)=>m.direccion==='saliente';
 const lowPriority=(t:Conversacion)=>!!t.gestion&&(t.gestion.bajo_minimo||t.gestion.tipo_consulta==='no_comercial');
@@ -28,8 +28,11 @@ export default function BandejaConsultas(){
  const [templates,setTemplates]=useState<Plantilla[]>([]),[slashIdx,setSlashIdx]=useState(0),[slashClosed,setSlashClosed]=useState(false),[docs,setDocs]=useState<Documento[]>([]),[attach,setAttach]=useState<Adjunto[]>([]),[attachMenu,setAttachMenu]=useState(false);
  const [empresa,setEmpresa]=useState<Empresa|null>(null),[quoteCase,setQuoteCase]=useState<number|null>(null),[notesOpen,setNotesOpen]=useState(false),[notes,setNotes]=useState<NotaInterna[]>([]),[noteText,setNoteText]=useState(''),[deriveArea,setDeriveArea]=useState('');
  const [focusIdx,setFocusIdx]=useState(-1);
+ const [foco,setFoco]=useState(false),[undo,setUndo]=useState<{run:()=>Promise<unknown>}|null>(null);
+ const focoRef=useRef(false);
+ useEffect(()=>{if(!undo)return;const t=setTimeout(()=>setUndo(null),7000);return()=>clearTimeout(t)},[undo]);
  const [summary,setSummary]=useState(''),[undoDraft,setUndoDraft]=useState<string|null>(null),[autoFollowup,setAutoFollowup]=useState(false);
- const readonly=user?.role==='gerencia';
+ const readonly=!puede(user,'responder');
  const reportRef=useRef<HTMLElement|null>(null),transcriptRef=useRef<HTMLDivElement|null>(null),composerRef=useRef<HTMLTextAreaElement|null>(null);
  const activeMessageIdRef=useRef<number|null>(null),loadedRef=useRef(PAGE),selectedRef=useRef<string|null>(null);
  selectedRef.current=selected;
@@ -116,6 +119,16 @@ export default function BandejaConsultas(){
    if(d.no_leidos>0&&!readonly){await api(`/api/inbox/conversations/${key}/read`,{method:'POST'});setItems(old=>old.map(i=>i.key===key?{...i,no_leidos:0}:i))}
   }catch(e){setError(e instanceof Error?e.message:'No se pudo abrir la conversación')}
  }
+ // Modo foco: abre la consulta más urgente sin responder (propia o libre) y, al registrar la respuesta, pasa a la siguiente.
+ async function nextConsulta(){try{const page=await api<Pagina<Conversacion>>(`/api/inbox/conversations?${qs({estado:'sin_responder',responsable:'mias_y_libres',orden:'prioridad',limit:5,offset:0})}`);
+  const next=page.items.find(c=>c.key!==selectedRef.current)||null;
+  if(!next){focoRef.current=false;setFoco(false);closeThread();setNotice('Bandeja al día');return}
+  await openConversation(next.key);setTimeout(()=>composerRef.current?.focus(),120)}catch(e){setError(e instanceof Error?e.message:'No se pudo abrir la siguiente')}}
+ useEffect(()=>{const on=()=>{focoRef.current=true;setFoco(true);void nextConsulta()};window.addEventListener('impulso:foco',on);
+  if(new URLSearchParams(window.location.search).get('foco')==='1'){window.history.replaceState(null,'','/consultas');setTimeout(on,300)}
+  return()=>window.removeEventListener('impulso:foco',on)
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[]);
  async function loadOlder(){if(!detail||!detail.mensajes.length)return;setOlderLoading(true);const box=transcriptRef.current;const before=box?.scrollHeight||0;try{const older=await api<ConversacionDetalle>(`/api/inbox/conversations/${detail.key}?${qs({antes_de:detail.mensajes[0].recibido_el})}`);setDetail(d=>d?{...d,mensajes:[...older.mensajes,...d.mensajes],hay_anteriores:older.hay_anteriores}:d);requestAnimationFrame(()=>{if(box)box.scrollTop=box.scrollHeight-before})}catch(e){setError(String(e))}finally{setOlderLoading(false)}}
  function pick(m:ConsultaBandeja){if(isOut(m))return;setCaseMenu(false);setMoreMenu(false);setMessageId(m.id);setAnalysis(null);setShowReport(false);setSendChannel(m.canal==='Correo'?'Correo':'WhatsApp')}
  async function markUnread(){if(!activeMessage||readonly)return;setBusy(true);try{await api(`/api/inbox/${activeMessage.id}/read`,{method:'POST',body:JSON.stringify({read:false})});setSelected(null);setDetail(null);await loadList('refresh')}catch(e){setError(String(e))}finally{setBusy(false)}}
@@ -124,12 +137,13 @@ export default function BandejaConsultas(){
  async function act(action:()=>Promise<unknown>,ok:string){setBusy(true);setError('');try{await action();await refreshAll();setNotice(ok)}catch(e){setError(e instanceof Error?e.message:'No se pudo completar la acción')}finally{setBusy(false)}}
  async function generate(kind:'report'|'draft',regenerate=false,lote=loteMinimo,objetivo:'responder'|'seguimiento'='responder'){if(!activeMessage)return;const target=activeMessage.id;setBusy(true);setGenerating(kind);setError('');try{const r=await api<{resultado:ConsultaIA;borrador:string}>(`/api/inbox/${target}/analysis`,{method:'POST',body:JSON.stringify({regenerar:regenerate||objetivo==='seguimiento',informar_lote_minimo:lote,objetivo})});if(activeMessageIdRef.current!==target)return;setAnalysis(r.resultado);if(kind==='draft'){setDraft(r.borrador);setDraftSaved(r.borrador);composerRef.current?.focus()}if(selectedRef.current)await loadDetail(selectedRef.current);if(kind==='report')setShowReport(true)}catch(e){if(activeMessageIdRef.current===target)setError(e instanceof Error?e.message:'No se pudo generar')}finally{setBusy(false);setGenerating('')}}
  // La IA es una ayuda opcional: si ya hay texto escrito, se pregunta antes de reemplazarlo.
- function suggestWithAI(lote=loteMinimo){setAiMenu(false);if(draft.trim()&&draft!==draftSaved&&!window.confirm('¿Reemplazar lo que escribiste por la respuesta sugerida por la IA?'))return;if(draft.trim()&&draft===draftSaved&&analysis&&!window.confirm('¿Reemplazar el borrador actual por una nueva sugerencia de la IA?'))return;void generate('draft',!!analysis,lote)}
- function suggestFollowup(){setAiMenu(false);if(draft.trim()&&!window.confirm('¿Reemplazar lo que escribiste por un mensaje de seguimiento sugerido por la IA?'))return;void generate('draft',true,false,'seguimiento')}
+ // La IA reemplaza el texto sin preguntar; "Deshacer" recupera lo que había.
+ function suggestWithAI(lote=loteMinimo){setAiMenu(false);if(draft.trim())setUndoDraft(draft);void generate('draft',!!analysis,lote)}
+ function suggestFollowup(){setAiMenu(false);if(draft.trim())setUndoDraft(draft);void generate('draft',true,false,'seguimiento')}
  async function saveAnalysis(){if(!analysis||!currentCase)return;const c=currentCase;setBusy(true);try{await api(`/api/fichas/${c.id}/edit`,{method:'POST',body:JSON.stringify({titulo:c.titulo,cliente:c.cliente,contacto:c.contacto,producto:c.producto||analysis.producto,cantidad:c.cantidad??analysis.cantidad,tipo_consulta:c.tipo_consulta!=='sin_clasificar'?c.tipo_consulta:(analysis.tipo_consulta||'sin_clasificar'),presentacion:c.presentacion||analysis.presentacion||'',packaging:c.packaging,requisitos:analysis.requisitos,datos_faltantes:analysis.datos_faltantes,resumen:analysis.resumen,origen:'ia'})});await refreshAll();setNotice('Guardado')}catch(e){setError(String(e))}finally{setBusy(false)}}
  async function saveDraft(silent=false){if(!activeMessage)return;const target=activeMessage.id;const snapshot=draft;try{await api(`/api/inbox/${target}/draft`,{method:'POST',body:JSON.stringify({borrador:snapshot})});if(activeMessageIdRef.current===target){setDraftSaved(snapshot);if(!silent)setNotice('Borrador guardado')}}catch(e){if(activeMessageIdRef.current===target)setError(String(e))}}
  async function copyAndRegister(){if(!activeMessage||!draft.trim()||busy)return;const text=draft;try{await navigator.clipboard.writeText(text)}catch{/* Si el navegador no permite copiar, igual se registra la respuesta. */}
-  await act(async()=>{await api(`/api/inbox/${activeMessage.id}/reply`,{method:'POST',body:JSON.stringify({texto:text,canal:sendChannel,adjuntos:attach.map(a=>a.id)})});setAttach([]);await api(`/api/inbox/${activeMessage.id}/draft`,{method:'POST',body:JSON.stringify({borrador:''})}).catch(()=>{});setDraft('');setDraftSaved('')},`Copiado. Pegalo en ${sendChannel==='Correo'?'el correo':'WhatsApp'}.`)}
+  await act(async()=>{await api(`/api/inbox/${activeMessage.id}/reply`,{method:'POST',body:JSON.stringify({texto:text,canal:sendChannel,adjuntos:attach.map(a=>a.id)})});setAttach([]);await api(`/api/inbox/${activeMessage.id}/draft`,{method:'POST',body:JSON.stringify({borrador:''})}).catch(()=>{});setDraft('');setDraftSaved('')},`Copiado. Pegalo en ${sendChannel==='Correo'?'el correo':'WhatsApp'}.`);if(focoRef.current)void nextConsulta()}
  async function newCaseForLatest(){const g=detail?.gestion;if(!detail||!g)return;const closedAt=g.cerrada_en?new Date(g.cerrada_en).getTime():0;const after=detail.mensajes.filter(m=>!isOut(m)&&m.ficha_id===g.id&&new Date(m.recibido_el).getTime()>closedAt);const first=after[0]||detail.mensajes.filter(m=>!isOut(m)).at(-1);if(!first)return;
   await act(async()=>{const c=await api<{id:number}>(`/api/inbox/${first.id}/new-case`,{method:'POST',body:JSON.stringify({titulo:`Nueva consulta de ${detail.cliente}`})});for(const m of after)await api(`/api/inbox/${m.id}/move`,{method:'POST',body:JSON.stringify({ficha_id:c.id})});setActiveCase(c.id)},'Nueva gestión creada con los mensajes posteriores al cierre')}
  // Respuestas rápidas: "/" al comienzo de una palabra abre la lista de plantillas.
@@ -149,7 +163,7 @@ export default function BandejaConsultas(){
  async function openDoc(id:number){try{abrirArchivo(await api<ArchivoB64>(`/api/documentos/${id}`))}catch(e){setError(String(e))}}
  const sortedMessages=[...caseMessages].sort((a,b)=>new Date(a.recibido_el).getTime()-new Date(b.recibido_el).getTime());
  const messageDay=(m:ConsultaBandeja)=>new Date(m.recibido_el).toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'short'});
- function closeThread(){if(draft!==draftSaved&&activeMessage&&!readonly)void saveDraft(true);setSelected(null);setDetail(null);setCaseMenu(false);setMoreMenu(false);setAiMenu(false);setShowReport(false);void loadList('refresh')}
+ function closeThread(){focoRef.current=false;setFoco(false);if(draft!==draftSaved&&activeMessage&&!readonly)void saveDraft(true);setSelected(null);setDetail(null);setCaseMenu(false);setMoreMenu(false);setAiMenu(false);setShowReport(false);void loadList('refresh')}
  const ownerName=(u?:string)=>owners.find(o=>o.username===u)?.name||u||'';
  // Seguimiento sugerido: cotización o muestra enviada y el cliente no contesta hace N días.
  const lastMsg=sortedMessages.at(-1);
@@ -159,7 +173,7 @@ export default function BandejaConsultas(){
  const pendientes=currentCase?.datos_a_confirmar||analysis?.datos_a_confirmar||[];
  const extrasIA=(analysis?.datos_faltantes||[]).filter(x=>!pendientes.some(p=>p.toLowerCase()===x.toLowerCase()));
  const canalTexto=sendChannel==='Correo'?'email':'WhatsApp';
- return <Shell><div className="v2-page-head"><div><h1>Bandeja de consultas</h1></div><div className="v2-head-right"><span className="v2-sync">{lastSync?'Sincronizado':'Conectando'}</span><ExportButton path={`/api/export/gestiones?${qs({estado:filter==='todas'||filter==='cerradas'?filter:'abiertas',q:query})}`} onError={setError}/>{!readonly&&<button className="btn btn-primary" onClick={()=>setOpenNew(true)}><Plus size={17}/> Nueva consulta</button>}</div></div>
+ return <Shell><div className="v2-page-head"><div><h1>Bandeja</h1></div><div className="v2-head-right"><button type="button" className="btn btn-outline" onClick={()=>{focoRef.current=true;setFoco(true);void nextConsulta()}} title="La consulta más urgente, una tras otra (F)">Siguiente <kbd className="v5-hide-mobile">F</kbd></button>{puede(user,'exportar')&&<ExportButton path={`/api/export/gestiones?${qs({estado:filter==='todas'||filter==='cerradas'?filter:'abiertas',q:query})}`} onError={setError}/>}{!readonly&&<button className="btn btn-primary" onClick={()=>setOpenNew(true)}><Plus size={17}/> Nueva consulta</button>}</div></div>
  {error&&<p className="alert error" role="alert">{error}</p>}
  <section className="panel v2-inbox"><div className="v3-inbox-filters"><label className="search"><Search size={17}/><input placeholder="Buscar en conversaciones" value={search} onChange={e=>setSearch(e.target.value)}/></label><div className="v3-switch">{filters.map(([val,label])=><button key={val} className={channel===val?'selected':''} onClick={()=>setChannel(val)}>{label}</button>)}</div>
   <div className="v5-filter-row">
@@ -193,9 +207,10 @@ export default function BandejaConsultas(){
       {currentCase&&user&&<button type="button" className="v4-menu-item" onClick={()=>{setMoreMenu(false);window.dispatchEvent(new CustomEvent('impulso:compartir-gestion',{detail:{ficha_id:currentCase.id,codigo:currentCase.codigo,cliente:currentCase.cliente,titulo:currentCase.titulo}}))}}><MessagesSquare size={16}/> Consultar con un compañero</button>}
       {activeCase&&<button type="button" className="v4-menu-item" onClick={()=>{setMoreMenu(false);setNotesOpen(true);setShowReport(false);setDeriveArea(currentCase?.derivada_a||'')}}><StickyNote size={16}/> Notas internas y derivar</button>}
       {!readonly&&<button type="button" className="v4-menu-item" onClick={()=>void aiText('resumir')} disabled={busy}><ListChecks size={16}/> Resumir conversación con IA</button>}
-      {activeCase&&!readonly&&currentCase?.tipo_consulta!=='no_comercial'&&!esCerrada(currentCase?.estado_gestion)&&<button type="button" className="v4-menu-item" onClick={()=>{setMoreMenu(false);if(window.confirm('¿Archivar como consulta no comercial? Queda resuelta y no cuenta en los indicadores de ventas.'))void act(()=>api(`/api/fichas/${activeCase}/no-comercial`,{method:'POST'}),'Archivada como no comercial')}}><Archive size={16}/> Archivar como no comercial</button>}
+      {activeCase&&!readonly&&currentCase?.tipo_consulta!=='no_comercial'&&!esCerrada(currentCase?.estado_gestion)&&<button type="button" className="v4-menu-item" onClick={()=>{setMoreMenu(false);const prev={id:activeCase,tipo_consulta:currentCase?.tipo_consulta||'sin_clasificar',estado_gestion:currentCase?.estado_gestion||'sin_atender'};void act(()=>api(`/api/fichas/${prev.id}/no-comercial`,{method:'POST'}),'Archivada como no comercial').then(()=>setUndo({run:()=>api(`/api/fichas/${prev.id}/no-comercial/deshacer`,{method:'POST',body:JSON.stringify({tipo_consulta:prev.tipo_consulta,estado_gestion:prev.estado_gestion})})}))}}><Archive size={16}/> Archivar como no comercial</button>}
      </div>}
     </div>}
+    {foco&&<button type="button" className="btn btn-outline btn-sm v7-next" onClick={()=>void nextConsulta()}>Siguiente</button>}
     <button className="v4-icon-action" type="button" aria-label="Cerrar conversación" onClick={closeThread}><X size={19}/></button>
    </header>
    {!detail?<div className="v4-chat-transcript v5-center"><Loader2 className="v5-spin"/> Cargando conversación…</div>:<>
@@ -279,7 +294,7 @@ export default function BandejaConsultas(){
       <button type="button" className="v4-icon-action v6-attach" aria-label="Adjuntar documento" title="Adjuntar catálogo, ficha técnica u otro documento" aria-expanded={attachMenu} onClick={()=>{setAttachMenu(v=>!v);setAiMenu(false)}}><Paperclip size={18}/></button>
       {attachMenu&&<div className="v5-ai-menu v6-attach-menu" role="menu"><div className="v4-menu-heading">Documentos de Pasmanter</div>
        {docs.map(d=>{const on=attach.some(a=>a.id===d.id);return <button type="button" role="menuitemcheckbox" aria-checked={on} key={d.id} className={`v4-menu-item ${on?'is-current':''}`} onClick={()=>setAttach(old=>on?old.filter(a=>a.id!==d.id):[...old,d])}><FileText size={15}/><span className="v4-menu-copy"><strong>{d.nombre}</strong><small>{d.descripcion||tamanoTexto(d.tamano)}</small></span>{on&&<Check size={15}/>}</button>})}
-       {!docs.length&&<p className="muted v6-pad">Todavía no hay documentos. {user?.role==='administrador'?<Link href="/administracion?tab=documentos">Subilos en Administración</Link>:'Pedile a Administración que los suba.'}</p>}
+       {!docs.length&&<p className="muted v6-pad">Todavía no hay documentos. {user?.role==='administrador'?<Link href="/ajustes?s=contenido">Subilos en Administración</Link>:'Pedile a Administración que los suba.'}</p>}
       </div>}
      </div>
      <textarea ref={composerRef} rows={1} aria-label="Escribí tu respuesta" placeholder={generating==='draft'?'La IA está preparando una sugerencia…':`Escribí tu respuesta por ${canalTexto}…`} value={draft} disabled={generating==='draft'}
@@ -291,9 +306,10 @@ export default function BandejaConsultas(){
     <small className="v5-composer-hint">{undoDraft!==null&&<><button type="button" className="v3-text-action" onClick={()=>{setDraft(undoDraft);setUndoDraft(null)}}><Undo2 size={12}/> Deshacer</button> · </>}{draft!==draftSaved?'Guardando…':draft?'Guardado':''}{draft?' · ':''}/ respuestas rápidas · Ctrl+Enter copia y registra</small>
    </footer>}
    </>}
-   {notice&&<div className="v4-toast" role="status"><Check size={15}/>{notice}<button type="button" onClick={()=>setNotice('')} aria-label="Cerrar aviso"><X size={13}/></button></div>}
+   {notice&&<div className="v4-toast" role="status"><Check size={15}/>{notice}{undo&&<button type="button" className="v7-undo" onClick={()=>{const u=undo;setUndo(null);setNotice('');void act(u.run,'Deshecho')}}>Deshacer</button>}<button type="button" onClick={()=>{setNotice('');setUndo(null)}} aria-label="Cerrar aviso"><X size={13}/></button></div>}
   </div>
  </div>}
+ {!selected&&notice&&<div className="v4-toast" role="status"><Check size={15}/>{notice}<button type="button" onClick={()=>setNotice('')} aria-label="Cerrar aviso"><X size={13}/></button></div>}
  {quoteCase&&<QuoteDialog fichaId={quoteCase} onClose={()=>setQuoteCase(null)} onSaved={msg=>{void refreshAll();setNotice(msg)}}/>}
  {formCase&&<CaseDialog fichaId={formCase} onClose={()=>{setFormCase(null);void refreshAll()}} readOnly={readonly}/>}
  </Shell>;

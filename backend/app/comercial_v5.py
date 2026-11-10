@@ -52,6 +52,16 @@ PLANTILLAS_INICIALES = [
     ('exportacion', 'Consulta de exportación',
      'Exportamos a distintos países de la región. Para cotizar necesitamos el país de destino, los productos de interés, los '
      'volúmenes estimados y si cuentan con registro sanitario en destino.'),
+    ('fullservice', 'Full Service',
+     'Hola {contacto}, con Full Service nos ocupamos de todo el proceso: desarrollo de fórmula, diseño de packaging, abastecimiento, '
+     'elaboración, envasado, codificado, estuchado y entrega. Para cotizar {producto} contanos la cantidad, la presentación y si ya '
+     'tenés fórmula o marca registrada.'),
+    ('marcapropia', 'Marca propia para cadenas',
+     'Hola {contacto}, producimos productos de marca propia para cadenas de supermercados y farmacias. Contanos qué líneas te '
+     'interesan, los volúmenes estimados y si ya tienen especificaciones o fórmula definida.'),
+    ('etiqueta', 'Diseño de etiquetas',
+     'También podemos encargarnos del diseño de etiquetas y del acondicionamiento final. Si ya tenés el diseño, pasanos el archivo '
+     'y la medida del envase; si no, lo armamos con vos.'),
     ('gracias', 'Cierre cordial',
      'Muchas gracias, {contacto}. Quedamos atentos a tu respuesta. Saludos, {vendedor} – Roberto Pasmanter S.A.'),
 ]
@@ -65,10 +75,13 @@ PRODUCTOS_EJEMPLO = [
     ('AF-BS200', 'Acqua Di Fiore Body splash 200 ml', 'unidad', 'Acqua Di Fiore', 3300, 'ARS'),
     ('TG-JL500', 'Tango Jabón líquido 500 ml', 'unidad', 'Tango', 1650, 'ARS'),
     ('TG-AG250', 'Tango Alcohol en gel 250 ml', 'unidad', 'Tango', 1200, 'ARS'),
-    ('FT-ELAB', 'Servicio de elaboración (fasón) por unidad', 'unidad', 'Fabricación para terceros', 0.85, 'USD'),
-    ('FT-ENV', 'Servicio de envasado y acondicionamiento por unidad', 'unidad', 'Fabricación para terceros', 0.35, 'USD'),
-    ('FT-DESA', 'Desarrollo de fórmula (por proyecto)', 'proyecto', 'Desarrollo', 1800, 'USD'),
-    ('FT-PILOTO', 'Lote piloto / muestras', 'lote', 'Desarrollo', 450, 'USD'),
+    ('SV-DESA', 'Desarrollo de fórmula (por proyecto)', 'proyecto', 'Servicios', 1800, 'USD'),
+    ('SV-PILOTO', 'Lote piloto y muestras', 'lote', 'Servicios', 450, 'USD'),
+    ('SV-ELAB', 'Elaboración y envasado (por unidad)', 'unidad', 'Servicios', 0.85, 'USD'),
+    ('SV-COD', 'Codificado (por unidad)', 'unidad', 'Servicios', 0.03, 'USD'),
+    ('SV-EST', 'Estuchado y celofanado (por unidad)', 'unidad', 'Servicios', 0.12, 'USD'),
+    ('SV-ETIQ', 'Diseño de etiqueta', 'diseño', 'Servicios', 350, 'USD'),
+    ('SV-ANMAT', 'Gestión de trámite ANMAT', 'trámite', 'Servicios', 600, 'USD'),
 ]
 
 # Columnas reconocidas al importar: nombres habituales en exportaciones de Tango Gestión y planillas comunes.
@@ -146,21 +159,39 @@ def init_v5(db_path: Path) -> None:
           usuario TEXT NOT NULL, mes TEXT NOT NULL, moneda TEXT NOT NULL, monto REAL NOT NULL,
           PRIMARY KEY (usuario, mes, moneda));
         ''')
+        _add_columns(con, 'cotizaciones', {'token': "TEXT", 'aceptada_en': 'TEXT', 'aceptada_por': "TEXT NOT NULL DEFAULT ''"})
+        con.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_cotizaciones_token ON cotizaciones(token)')
         _add_columns(con, 'oportunidades', {'codigo_tango': "TEXT NOT NULL DEFAULT ''", 'cuit': "TEXT NOT NULL DEFAULT ''",
                                             'localidad': "TEXT NOT NULL DEFAULT ''", 'provincia': "TEXT NOT NULL DEFAULT ''",
                                             'lista_precios': "TEXT NOT NULL DEFAULT ''", 'es_cliente': 'INTEGER NOT NULL DEFAULT 0',
                                             'importado_en': 'TEXT'})
-        _add_columns(con, 'fichas_consulta', {'derivada_a': "TEXT NOT NULL DEFAULT ''"})
+        _add_columns(con, 'fichas_consulta', {'derivada_a': "TEXT NOT NULL DEFAULT ''", 'rubro': "TEXT NOT NULL DEFAULT ''",
+                                              'envase': "TEXT NOT NULL DEFAULT ''", 'tipo_cliente': "TEXT NOT NULL DEFAULT ''",
+                                              'etapas_json': "TEXT NOT NULL DEFAULT '[]'"})
         # Color de acento del cliente (Impulso mantiene su identidad; cada empresa elige su color).
         _add_columns(con, 'empresa_config', {'color_acento': "TEXT NOT NULL DEFAULT '#2e6a57'"})
         _add_columns(con, 'bandeja_consultas', {'adjuntos_json': "TEXT NOT NULL DEFAULT '[]'"})
         con.execute('CREATE INDEX IF NOT EXISTS idx_oportunidades_codigo ON oportunidades(codigo_tango)')
+        # Tono de Pasmanter: voseo. Se aplica una sola vez si nadie cambió la configuración de la IA.
+        con.execute('CREATE TABLE IF NOT EXISTS migraciones (clave TEXT PRIMARY KEY)')
+        if not con.execute("SELECT 1 FROM migraciones WHERE clave='ia_voseo'").fetchone():
+            con.execute("UPDATE ia_configuracion SET tratamiento='vos' WHERE id=1 AND tratamiento='ustedes' AND instrucciones=''")
+            con.execute("INSERT INTO migraciones(clave) VALUES ('ia_voseo')")
         # Lista de precios de ejemplo para que el cotizador funcione desde el primer uso (se reemplaza al importar).
-        if not con.execute('SELECT COUNT(*) FROM productos').fetchone()[0]:
+        # Lista de ejemplo mientras no se importe una real; reemplaza los servicios genéricos anteriores.
+        if not con.execute("SELECT 1 FROM productos WHERE origen<>'ejemplo'").fetchone():
+            con.execute("DELETE FROM productos WHERE origen='ejemplo' AND codigo LIKE 'FT-%'")
             load_example_products(con)
-        if not con.execute('SELECT COUNT(*) FROM plantillas').fetchone()[0]:
-            con.executemany('INSERT INTO plantillas(atajo,titulo,texto,actualizada_en) VALUES (?,?,?,?)',
-                            [(a, t, x, stamp()) for a, t, x in PLANTILLAS_INICIALES])
+        # Se agregan las plantillas de ejemplo que falten (no se pisan las editadas).
+        # Cada plantilla de ejemplo se siembra una sola vez: si el administrador la borra, no vuelve.
+        con.execute('CREATE TABLE IF NOT EXISTS plantillas_semilla (atajo TEXT PRIMARY KEY)')
+        if not con.execute('SELECT 1 FROM plantillas_semilla').fetchone():
+            con.executemany('INSERT OR IGNORE INTO plantillas_semilla(atajo) SELECT atajo FROM plantillas WHERE atajo=?',
+                            [(a,) for a, _, _ in PLANTILLAS_INICIALES])
+        for a, t, x in PLANTILLAS_INICIALES:
+            if not con.execute('SELECT 1 FROM plantillas_semilla WHERE atajo=?', (a,)).fetchone():
+                con.execute('INSERT OR IGNORE INTO plantillas(atajo,titulo,texto,actualizada_en) VALUES (?,?,?,?)', (a, t, x, stamp()))
+                con.execute('INSERT INTO plantillas_semilla(atajo) VALUES (?)', (a,))
 
 
 def load_example_products(con) -> int:
@@ -225,12 +256,25 @@ def board_item(r, lote) -> dict:
             'conversacion': str(conv_key(r))}
 
 
+def pulse(con, start: datetime) -> list[int]:
+    """Consultas entrantes por hora del día (hora de Argentina)."""
+    counts = [0] * 24
+    for r in con.execute("SELECT recibido_el FROM bandeja_consultas WHERE direccion<>'saliente' AND recibido_el>=?", (start.isoformat(),)):
+        t = parse_dt(r['recibido_el'])
+        if t:
+            h = int((t - start).total_seconds() // 3600)
+            if 0 <= h < 24:
+                counts[h] += 1
+    return counts
+
+
 def my_day(con, user, usuario: str = '') -> dict:
     """Tablero personal: asignadas al usuario y sin asignar, más seguimientos y actividades del día.
     Administración y gerencia pueden ver el tablero de otro vendedor."""
     me = user['username'] if user else ''
     role = user['role'] if user else 'administrador'
-    target = usuario if usuario and role in ('administrador', 'gerencia') else me
+    from .permisos import allowed
+    target = usuario if usuario and allowed(con, user, 'tablero_otros') else me
     lote = lote_minimo(con)
     cfg = empresa(con)
     pend_first = 'ORDER BY CASE WHEN f.pendiente_desde IS NULL THEN 1 ELSE 0 END, f.pendiente_desde, f.ultimo_mensaje_en DESC'
@@ -262,7 +306,7 @@ def my_day(con, user, usuario: str = '') -> dict:
                 'ficha_codigo': a['ficha_codigo'], 'conversacion': str(a['conv']) if a['conv'] is not None else ''}
         (hoy if t >= start else vencidas).append(item)
     usuarios = []
-    if role in ('administrador', 'gerencia'):
+    if allowed(con, user, 'tablero_otros'):
         usuarios = [{'usuario': r['usuario'], 'nombre': r['nombre']} for r in con.execute(
             "SELECT usuario, nombre FROM usuarios WHERE activo=1 AND rol IN ('ventas','administrador') ORDER BY nombre")]
     return {
@@ -273,6 +317,7 @@ def my_day(con, user, usuario: str = '') -> dict:
         'actividades_hoy': hoy, 'actividades_vencidas': vencidas[:15],
         'seguimientos_sugeridos': followups_due(con, 'AND f.responsable=?', [target], int(cfg['dias_seguimiento']))[:15],
         'dias_seguimiento': int(cfg['dias_seguimiento']),
+        'pulso': pulse(con, start),
     }
 
 
@@ -602,7 +647,7 @@ def xlsx(sheets: list[tuple[str, list[str], list[list]]]) -> bytes:
 
 ESTADO_NOMBRE = {'sin_atender': 'Sin atender', 'calificada': 'Calificada', 'cotizada': 'Cotizada', 'muestra_piloto': 'Muestra / piloto',
                  'concretada': 'Concretada', 'no_concretada': 'No concretada', 'resuelta': 'Resuelta'}
-TIPO_NOMBRE = {'sin_clasificar': 'Sin clasificar', 'fabricacion_terceros': 'Fabricación para terceros', 'desarrollo_formula': 'Desarrollo de fórmula',
+TIPO_NOMBRE = {'sin_clasificar': 'Sin clasificar', 'fabricacion_terceros': 'Full Service', 'produccion_terceros': 'Producción a terceros', 'otros_servicios': 'Otros servicios', 'desarrollo_formula': 'Desarrollo de fórmula',
                'elaboracion_envasado': 'Elaboración y envasado', 'mayorista': 'Compra mayorista', 'exportacion': 'Exportación',
                'no_comercial': 'No comercial', 'otro': 'Otra consulta'}
 
@@ -667,11 +712,9 @@ class TextoIAInput(BaseModel):
     conversacion: str = Field(default='', max_length=30)
 
 
-def _not_readonly(request, db_path):
-    user = current(request, db_path)
-    if user and user['role'] == 'gerencia':
-        raise HTTPException(403, 'Gerencia solo consulta')
-    return user
+def _not_readonly(request, db_path, perm='gestionar'):
+    from .permisos import require
+    return require(db_path, current(request, db_path), perm)
 
 
 def register_v5(app: FastAPI, db_path: Path):
@@ -681,6 +724,16 @@ def register_v5(app: FastAPI, db_path: Path):
         user = current(request, db_path)
         with connect(db_path) as con:
             return my_day(con, user, usuario.strip())
+
+    # --------------------------------------------------------------- Detalle de los números del resumen
+    @app.get('/api/reports/detalle')
+    def report_detail_endpoint(request: Request, indicador: str, period: str = 'mes', channel: str = 'todos', responsable: str = ''):
+        user = current(request, db_path)
+        from .metrics import report_detail, INDICADORES_DETALLE
+        if indicador not in INDICADORES_DETALLE or period not in ('mes', 'semana', 'trimestre', 'todos'):
+            raise HTTPException(422, 'Indicador o período inválido')
+        with connect(db_path) as con:
+            return report_detail(con, indicador, period=period, canal=channel, responsable=responsable, user=user)
 
     # --------------------------------------------------------------- Empresa / reglas
     @app.get('/api/empresa')
@@ -777,10 +830,12 @@ def register_v5(app: FastAPI, db_path: Path):
             today = date.today().isoformat()
             seq = con.execute('SELECT COUNT(*) FROM cotizaciones WHERE ficha_id=?', (ficha_id,)).fetchone()[0] + 1
             numero = f"{f['codigo'].replace('CON-', 'COT-')}-{seq}"
+            import secrets
             cur = con.execute('''INSERT INTO cotizaciones(ficha_id,numero,fecha,validez_dias,moneda,incluye_iva,iva_pct,condiciones,notas,
-                                 subtotal,iva,total,creada_por,creada_en) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                                 subtotal,iva,total,creada_por,creada_en,token) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                               (ficha_id, numero, today, payload.validez_dias, payload.moneda, int(payload.incluye_iva), payload.iva_pct,
-                               payload.condiciones, payload.notas, subtotal, iva, total, user['username'] if user else '', stamp()))
+                               payload.condiciones, payload.notas, subtotal, iva, total, user['username'] if user else '', stamp(),
+                               secrets.token_urlsafe(18)))
             for it, importe in rows:
                 con.execute('''INSERT INTO cotizacion_items(cotizacion_id,producto_id,codigo,descripcion,unidad,cantidad,precio_unitario,
                                descuento_pct,importe) VALUES (?,?,?,?,?,?,?,?,?)''',
@@ -793,7 +848,12 @@ def register_v5(app: FastAPI, db_path: Path):
             elif payload.actualizar_estado and f['estado_gestion'] == 'muestra_piloto':
                 con.execute('''UPDATE fichas_consulta SET cotizacion_monto=?, cotizacion_moneda=?, cotizacion_fecha=?, cotizacion_validez_dias=?,
                                actualizada_en=? WHERE id=?''', (total, payload.moneda, today, payload.validez_dias, stamp(), ficha_id))
-            return {'id': cur.lastrowid, 'numero': numero, 'total': total, 'moneda': payload.moneda}
+            from .historial import log
+            log(con, ficha_id, 'cotizacion', numero, money(total, payload.moneda), user['username'] if user else '')
+            if payload.actualizar_estado and f['estado_gestion'] in ('sin_atender', 'calificada'):
+                log(con, ficha_id, 'estado', 'cotizada', money(total, payload.moneda), user['username'] if user else '')
+            token = con.execute('SELECT token FROM cotizaciones WHERE id=?', (cur.lastrowid,)).fetchone()['token']
+            return {'id': cur.lastrowid, 'numero': numero, 'total': total, 'moneda': payload.moneda, 'token': token}
 
     @app.get('/api/cotizaciones/{quote_id}/pdf')
     def quote_pdf_endpoint(quote_id: int, request: Request):
@@ -801,6 +861,72 @@ def register_v5(app: FastAPI, db_path: Path):
         with connect(db_path) as con:
             data, name = quote_pdf(con, quote_id)
         return b64file(data, name, 'application/pdf')
+
+    # --------------------------------------------------------------- Cotización online (sin sesión, por enlace)
+    def public_quote(con, token: str):
+        if not token or len(token) < 16:
+            raise HTTPException(404, 'Cotización no encontrada')
+        q = con.execute('SELECT * FROM cotizaciones WHERE token=?', (token,)).fetchone()
+        if not q:
+            raise HTTPException(404, 'Cotización no encontrada')
+        return q
+
+    def public_view(con, q) -> dict:
+        f = con.execute('SELECT * FROM fichas_consulta WHERE id=?', (q['ficha_id'],)).fetchone()
+        cfg = empresa(con)
+        vence = date.fromisoformat(q['fecha']) + timedelta(days=int(q['validez_dias']))
+        estado = 'aceptada' if q['aceptada_en'] else ('vencida' if vence < date.today() else 'pendiente')
+        items = [{k: r[k] for k in ('codigo', 'descripcion', 'unidad', 'cantidad', 'precio_unitario', 'descuento_pct', 'importe')}
+                 for r in con.execute('SELECT * FROM cotizacion_items WHERE cotizacion_id=? ORDER BY id', (q['id'],))]
+        return {'empresa': {k: cfg[k] for k in ('razon_social', 'email', 'telefono', 'web', 'domicilio', 'color_acento') if k in cfg},
+                'numero': q['numero'], 'fecha': q['fecha'], 'vence': vence.isoformat(), 'estado': estado, 'aceptada_en': q['aceptada_en'],
+                'cliente': f['cliente'] if f else '', 'contacto': f['contacto'] if f else '', 'moneda': q['moneda'], 'items': items,
+                'subtotal': q['subtotal'], 'iva': q['iva'], 'iva_pct': q['iva_pct'], 'incluye_iva': bool(q['incluye_iva']),
+                'total': q['total'], 'condiciones': q['condiciones'], 'notas': q['notas']}
+
+    class AceptarInput(BaseModel):
+        nombre: str = Field(default='', max_length=120)
+
+    @app.get('/api/publico/cotizaciones/{token}')
+    def public_quote_get(token: str):
+        with connect(db_path) as con:
+            return public_view(con, public_quote(con, token))
+
+    @app.get('/api/publico/cotizaciones/{token}/pdf')
+    def public_quote_pdf(token: str):
+        with connect(db_path) as con:
+            data, name = quote_pdf(con, public_quote(con, token)['id'])
+        return b64file(data, name, 'application/pdf')
+
+    @app.post('/api/publico/cotizaciones/{token}/aceptar')
+    def public_quote_accept(token: str, payload: AceptarInput):
+        with connect(db_path) as con:
+            con.execute('BEGIN IMMEDIATE')
+            q = public_quote(con, token)
+            view = public_view(con, q)
+            if view['estado'] == 'vencida':
+                raise HTTPException(409, 'La cotización está vencida. Pedí una nueva.')
+            if view['estado'] == 'aceptada':
+                return view
+            now = datetime.now(timezone.utc).isoformat(timespec='seconds')
+            quien = payload.nombre.strip() or view['contacto'] or view['cliente']
+            con.execute('UPDATE cotizaciones SET aceptada_en=?, aceptada_por=? WHERE id=?', (now, quien, q['id']))
+            f = con.execute('SELECT * FROM fichas_consulta WHERE id=?', (q['ficha_id'],)).fetchone()
+            owner = f['responsable'] or q['creada_por']
+            con.execute('''UPDATE fichas_consulta SET estado_gestion='concretada', cerrada_en=?, motivo_cierre='', cotizacion_monto=?,
+                           cotizacion_moneda=?, cotizacion_fecha=?, actualizada_en=? WHERE id=?''',
+                        (now, q['total'], q['moneda'], q['fecha'], now, q['ficha_id']))
+            from .historial import log
+            log(con, q['ficha_id'], 'aceptacion', q['numero'], f'Aceptada online por {quien}', '')
+            log(con, q['ficha_id'], 'estado', 'concretada', money(q['total'], q['moneda']), '')
+            con.execute('INSERT INTO notas_internas(ficha_id,usuario,texto,creada_en) VALUES (?,?,?,?)',
+                        (q['ficha_id'], '', f"{quien} aceptó la cotización {q['numero']} ({money(q['total'], q['moneda'])}) desde el enlace.", now))
+            from .equipo import post
+            canal = con.execute("SELECT id FROM chat_canales WHERE clave='ventas'").fetchone()
+            if canal and owner:
+                post(con, canal['id'], owner, f"{f['cliente']} aceptó la cotización {q['numero']} · {money(q['total'], q['moneda'])}",
+                     q['ficha_id'], sistema=True)
+            return public_view(con, con.execute('SELECT * FROM cotizaciones WHERE id=?', (q['id'],)).fetchone())
 
     # --------------------------------------------------------------- Respuestas rápidas
     @app.get('/api/plantillas')
@@ -852,6 +978,7 @@ def register_v5(app: FastAPI, db_path: Path):
     @app.get('/api/export/gestiones')
     def export_cases(request: Request, estado: str = 'abiertas', q: str = ''):
         current(request, db_path)
+        from .permisos import require as _req; _req(db_path, current(request, db_path), 'exportar')
         from .escala import search_fichas
         with connect(db_path) as con:
             data = search_fichas(con, {'estado': estado, 'q': q}, 100000, 0)['items']
@@ -867,6 +994,7 @@ def register_v5(app: FastAPI, db_path: Path):
     @app.get('/api/export/contactos')
     def export_contacts(request: Request, q: str = '', activos: bool = False):
         current(request, db_path)
+        from .permisos import require as _req; _req(db_path, current(request, db_path), 'exportar')
         where, args = ['o.fusionada_con IS NULL'], []
         if activos:
             where.append(f'EXISTS (SELECT 1 FROM fichas_consulta f WHERE f.oportunidad_id=o.id AND f.estado_gestion IN {OPEN_SQL})')
@@ -886,6 +1014,7 @@ def register_v5(app: FastAPI, db_path: Path):
     @app.get('/api/export/reporte')
     def export_report(request: Request, period: str = 'mes', canal: str = 'todos', responsable: str = ''):
         user = current(request, db_path)
+        from .permisos import require as _req; _req(db_path, current(request, db_path), 'exportar')
         from .metrics import report_data
         with connect(db_path) as con:
             d = report_data(con, period=period, canal=canal, responsable=responsable, user=user)
@@ -930,6 +1059,8 @@ def register_v5(app: FastAPI, db_path: Path):
             if not con.execute('SELECT 1 FROM fichas_consulta WHERE id=?', (ficha_id,)).fetchone():
                 raise HTTPException(404, 'Gestión no encontrada')
             con.execute('UPDATE fichas_consulta SET derivada_a=?, actualizada_en=? WHERE id=?', (area, stamp(), ficha_id))
+            from .historial import log
+            log(con, ficha_id, 'derivacion', area, payload.nota.strip(), user['username'] if user else '')
             text = payload.nota.strip() or ('Derivada a ' + area if area else 'Se quitó la derivación')
             con.execute('INSERT INTO notas_internas(ficha_id,usuario,texto,area,creada_en) VALUES (?,?,?,?,?)',
                         (ficha_id, user['username'] if user else '', text, area, datetime.now(timezone.utc).isoformat(timespec='seconds')))
@@ -1029,7 +1160,7 @@ def register_v5(app: FastAPI, db_path: Path):
     # --------------------------------------------------------------- IA de texto
     @app.post('/api/ia/texto')
     def ai_text(request: Request, payload: TextoIAInput):
-        _not_readonly(request, db_path)
+        _not_readonly(request, db_path, 'responder')
         texto = payload.texto.strip()
         if payload.accion == 'resumir':
             if not payload.conversacion:

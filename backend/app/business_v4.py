@@ -30,15 +30,15 @@ ESTADOS_INACTIVOS = ESTADOS_CERRADOS + ('fusionada',)
 ESTADOS_GESTION = ESTADOS_ABIERTOS + ESTADOS_CERRADOS
 MOTIVOS_NO_CONCRETADA = ('Precio', 'Volumen bajo el mínimo', 'Plazo', 'Sin respuesta del cliente',
                          'Eligió otro proveedor', 'Otro')
-TIPOS_CON_LOTE_MINIMO = ('fabricacion_terceros', 'elaboracion_envasado')
-TIPOS_PRODUCCION = ('fabricacion_terceros', 'desarrollo_formula', 'elaboracion_envasado')
+TIPOS_CON_LOTE_MINIMO = ('fabricacion_terceros', 'produccion_terceros', 'elaboracion_envasado')
+TIPOS_PRODUCCION = ('fabricacion_terceros', 'produccion_terceros', 'desarrollo_formula', 'elaboracion_envasado')
 LOTE_MINIMO_DEFAULT = 10000
 # Equivalencias del estado anterior "En gestión" y de la etapa del contacto (dato histórico).
 ESTADO_LEGACY = {'en_gestion': 'calificada'}
 ESTADO_CONTACTO_A_GESTION = {'nueva': 'sin_atender', 'contactada': 'calificada', 'cotizada': 'cotizada',
                              'negociacion': 'cotizada', 'ganada': 'concretada', 'perdida': 'no_concretada'}
 
-TipoConsultaV4 = Literal['sin_clasificar', 'fabricacion_terceros', 'desarrollo_formula', 'elaboracion_envasado',
+TipoConsultaV4 = Literal['sin_clasificar', 'fabricacion_terceros', 'produccion_terceros', 'otros_servicios', 'desarrollo_formula', 'elaboracion_envasado',
                          'mayorista', 'exportacion', 'no_comercial', 'otro']
 SiNo = Literal['si', 'no', 'sin_especificar']
 
@@ -599,11 +599,9 @@ class CommercialSettings(BaseModel):
     lote_minimo: int = Field(ge=1, le=10_000_000)
 
 
-def _not_readonly(request: Request, db_path: Path):
-    user = current(request, db_path)
-    if user and user['role'] == 'gerencia':
-        raise HTTPException(403, 'Gerencia solo consulta')
-    return user
+def _not_readonly(request: Request, db_path: Path, perm: str = 'gestionar'):
+    from .permisos import require
+    return require(db_path, current(request, db_path), perm)
 
 
 def register_business_v4(app: FastAPI, db_path: Path):
@@ -646,7 +644,7 @@ def register_business_v4(app: FastAPI, db_path: Path):
 
     @app.post('/api/fichas/{ficha_id}/responsable')
     def set_owner(ficha_id: int, request: Request, payload: OwnerInput):
-        user = _not_readonly(request, db_path)
+        user = _not_readonly(request, db_path, 'asignar')
         # Cualquier vendedor puede tomar, liberar o pasarle una gestión a un compañero (por ejemplo, si está ausente).
         owner = payload.responsable.strip().casefold()
         with connect(db_path) as con:
@@ -656,10 +654,29 @@ def register_business_v4(app: FastAPI, db_path: Path):
             if owner and not con.execute('SELECT 1 FROM usuarios WHERE usuario=? AND activo=1', (owner,)).fetchone() and user:
                 raise HTTPException(422, 'Usuario no encontrado')
             con.execute('UPDATE fichas_consulta SET responsable=?, actualizada_en=? WHERE id=?', (owner, stamp(), ficha_id))
+            if owner != row['responsable']:
+                from .historial import log
+                log(con, ficha_id, 'responsable', owner, row['responsable'], user['username'] if user else '')
             if user and owner != row['responsable']:
                 from .equipo import notify_assignment
                 notify_assignment(con, ficha_id, owner, user['username'])
             return {'id': ficha_id, 'responsable': owner}
+
+    class DeshacerNoComercial(BaseModel):
+        tipo_consulta: TipoConsultaV4 = 'sin_clasificar'
+        estado_gestion: Literal['sin_atender', 'calificada', 'cotizada', 'muestra_piloto'] = 'sin_atender'
+
+    @app.post('/api/fichas/{ficha_id}/no-comercial/deshacer')
+    def undo_non_commercial(ficha_id: int, request: Request, payload: DeshacerNoComercial):
+        user = _not_readonly(request, db_path)
+        with connect(db_path) as con:
+            if not con.execute('SELECT 1 FROM fichas_consulta WHERE id=?', (ficha_id,)).fetchone():
+                raise HTTPException(404, 'Gestión no encontrada')
+            con.execute('''UPDATE fichas_consulta SET tipo_consulta=?, estado_gestion=?, cerrada_en=NULL, motivo_cierre='', actualizada_en=?
+                           WHERE id=?''', (payload.tipo_consulta, payload.estado_gestion, stamp(), ficha_id))
+            from .historial import log
+            log(con, ficha_id, 'estado', payload.estado_gestion, 'Se deshizo el archivo', user['username'] if user else '')
+            return {'id': ficha_id}
 
     @app.post('/api/fichas/{ficha_id}/no-comercial')
     def archive_non_commercial(ficha_id: int, request: Request):
@@ -672,12 +689,14 @@ def register_business_v4(app: FastAPI, db_path: Path):
             con.execute('''UPDATE fichas_consulta SET tipo_consulta='no_comercial', tipo_sugerido_ia=0, estado_gestion='resuelta',
                            cerrada_en=?, motivo_cierre='Consulta no comercial', campos_editados_json=?, actualizada_en=? WHERE id=?''',
                         (stamp(), json.dumps(editados), stamp(), ficha_id))
+            from .historial import log
+            log(con, ficha_id, 'estado', 'resuelta', 'No comercial', '')
             return {'id': ficha_id, 'estado': 'resuelta', 'tipo_consulta': 'no_comercial'}
 
     @app.post('/api/inbox/{message_id}/reply', status_code=201)
     def register_reply(message_id: int, request: Request, payload: ReplyInput):
         """Registra una respuesta enviada fuera de Impulso (copiada y pegada). No envía nada."""
-        user = _not_readonly(request, db_path)
+        user = _not_readonly(request, db_path, 'responder')
         with connect(db_path) as con:
             con.execute('BEGIN IMMEDIATE')
             msg = con.execute('SELECT * FROM bandeja_consultas WHERE id=?', (message_id,)).fetchone()

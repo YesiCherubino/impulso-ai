@@ -4,7 +4,8 @@ import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import {Check,ArrowRight,ArrowLeft} from 'lucide-react';
 import Shell from '@/components/shell';
-import {api,MiDia,ActividadMiDia,TarjetaMiDia,UsuarioSesion,tiempoSinRespuesta,cotizacionTexto,estadoGestionNombre,unidades} from '@/lib/api';
+import Pulso from '@/components/pulso';
+import {api,MiDia,ActividadMiDia,TarjetaMiDia,UsuarioSesion,tiempoSinRespuesta,cotizacionTexto,estadoGestionNombre,unidades,puede} from '@/lib/api';
 
 const hora=(s:string)=>new Date(s).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
 const dia=(s:string)=>new Date(s).toLocaleDateString('es-AR',{day:'numeric',month:'short'});
@@ -20,7 +21,7 @@ export default function MiDiaPage(){
  useEffect(()=>{void load()},[load]);
  useEffect(()=>{void fetch('/api/session/me').then(r=>r.ok?r.json():null).then(setUser).catch(()=>{})},[]);
  useEffect(()=>{const t=setInterval(()=>{if(document.visibilityState==='visible'&&dragging===null)void load()},30000);return()=>clearInterval(t)},[load,dragging]);
- const readonly=user?.role==='gerencia';
+ const readonly=!puede(user,'asignar');
  const owner=data?.usuario||user?.username||'';
 
  // Mover una tarjeta: se actualiza la pantalla al instante y después se guarda.
@@ -58,7 +59,9 @@ export default function MiDiaPage(){
  const acts=[...(data?.actividades_vencidas||[]).map(a=>({a,late:true})),...(data?.actividades_hoy||[]).map(a=>({a,late:false}))];
  return <Shell>
   <div className="v7-day-head"><div><div className="v7-date">{fecha}</div><h1>Mi día</h1></div>
-   {!!data?.usuarios.length&&<select aria-label="Ver el tablero de" value={ver||user?.username||''} onChange={e=>setVer(e.target.value===user?.username?'':e.target.value)}>{data.usuarios.map(u=><option key={u.usuario} value={u.usuario}>{u.usuario===user?.username?`${u.nombre} (yo)`:u.nombre}</option>)}{user&&!data.usuarios.some(u=>u.usuario===user.username)&&<option value={user.username}>{user.name} (yo)</option>}</select>}</div>
+   {data?.pulso&&<Pulso datos={data.pulso}/>}
+   <div className="v7-day-actions"><Link className="btn btn-primary" href="/consultas?foco=1" title="La consulta más urgente, una tras otra (F)">Siguiente consulta</Link>
+   {!!data?.usuarios.length&&<select aria-label="Ver el tablero de" value={ver||user?.username||''} onChange={e=>setVer(e.target.value===user?.username?'':e.target.value)}>{data.usuarios.map(u=><option key={u.usuario} value={u.usuario}>{u.usuario===user?.username?`${u.nombre} (yo)`:u.nombre}</option>)}{user&&!data.usuarios.some(u=>u.usuario===user.username)&&<option value={user.username}>{user.name} (yo)</option>}</select>}</div></div>
   {error&&<p className="alert error" role="alert">{error}</p>}
   {!data?<p className="muted">Cargando…</p>:<>
    <div className="v7-board">

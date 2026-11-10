@@ -14,6 +14,8 @@ from .business_v3 import init_v3, register_business_v3
 from .escala import register_escala
 from .comercial_v5 import init_v5, register_v5
 from .equipo import init_equipo, register_equipo
+from .permisos import init_permisos, register_permisos
+from .historial import init_historial, register_historial
 from .business_v4 import (init_v4, register_business_v4, build_case_context, apply_analysis,
                           sync_contact_followup, complete_contact_followup, create_case_for_contact)
 from fastapi import FastAPI, HTTPException, Request, Depends
@@ -43,6 +45,8 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
         init_v4(db_path)
         init_v5(db_path)
         init_equipo(db_path)
+        init_permisos(db_path)
+        init_historial(db_path)
         yield
 
     # Para demos públicas, la clave de acceso es obligatoria y no se expone en Next.js.
@@ -88,16 +92,28 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
     async def protect_private_api(request: Request, call_next):
         if (os.getenv('AUTH_ENABLED', 'false').lower() == 'true'
                 and request.url.path.startswith('/api/')
-                and request.url.path not in ('/api/health', '/api/auth/login', '/api/auth/logout')):
+                and request.url.path not in ('/api/health', '/api/auth/login', '/api/auth/logout')
+                and not request.url.path.startswith('/api/publico/')):
             if not auth.get_user(db_path, request.headers.get('x-session-token', '')):
                 from fastapi.responses import JSONResponse
                 return JSONResponse({'detail': 'Sesión no válida o vencida'}, status_code=401)
         if os.getenv('AUTH_ENABLED', 'false').lower() == 'true' and request.method not in ('GET', 'HEAD', 'OPTIONS'):
             path = request.url.path
-            user = auth.get_user(db_path, request.headers.get('x-session-token', ''))
-            if user and user.get('role') == 'gerencia' and ((path.startswith('/api/inbox') and not path.endswith('/read')) or path.startswith('/api/opportunities') or path.startswith('/api/ai/')):
-                from fastapi.responses import JSONResponse
-                return JSONResponse({'detail':'Gerencia tiene acceso de consulta, no puede modificar registros.'},status_code=403)
+            from .permisos import apply_view_as, allowed
+            user = apply_view_as(auth.get_user(db_path, request.headers.get('x-session-token', '')), request.headers.get('x-ver-como'))
+            perm = None
+            if path.startswith('/api/inbox') and not path.endswith('/read') and '/conversations/' not in path:
+                perm = 'responder'
+            elif path.startswith('/api/opportunities'):
+                perm = 'contactos'
+            elif path.startswith('/api/ai/'):
+                perm = 'responder'
+            if user and perm:
+                with connect(db_path) as con:
+                    ok = allowed(con, user, perm)
+                if not ok:
+                    from fastapi.responses import JSONResponse
+                    return JSONResponse({'detail': 'Tu perfil no tiene permiso para esta acción'}, status_code=403)
         return await call_next(request)
 
     @app.post('/api/auth/login')
@@ -111,10 +127,12 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
 
     @app.get('/api/auth/me')
     def me(request: Request):
-        user = auth.get_user(db_path, request.headers.get('x-session-token', ''))
+        from .permisos import apply_view_as, perms_for
+        user = apply_view_as(auth.get_user(db_path, request.headers.get('x-session-token', '')), request.headers.get('x-ver-como'))
         if not user:
             raise HTTPException(401, 'Sesión no válida o vencida')
-        return user
+        with connect(db_path) as con:
+            return {**user, 'permisos': perms_for(con, user['role'])}
 
     @app.post('/api/auth/logout')
     def logout(request: Request):
@@ -607,6 +625,8 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
     register_escala(app, db_path)
     register_v5(app, db_path)
     register_equipo(app, db_path)
+    register_permisos(app, db_path)
+    register_historial(app, db_path)
     return app
 
 app = create_app()

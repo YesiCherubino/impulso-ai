@@ -102,7 +102,7 @@ export default function TeamChat({user}:{user:UsuarioSesion|null}){
     <div className="v7-msgs" ref={scroller}>
      {more&&<button type="button" className="btn btn-outline btn-sm v7-older" onClick={()=>void older()}>Ver anteriores</button>}
      {msgs.map((m,i)=>{const prev=msgs[i-1];const cont=!!prev&&prev.usuario===m.usuario&&new Date(m.creado_en).getTime()-new Date(prev.creado_en).getTime()<5*60000;
-      return <div key={m.id} className={`v7-msg ${cont?'is-cont':''} ${m.sistema?'is-system':''}`}><span className="v7-av">{name(m.usuario).charAt(0).toUpperCase()}</span><div>
+      return <div key={m.id} className={`v7-msg ${cont?'is-cont':''} ${m.sistema?'is-system':''} ${m.sistema&&/^Cerré |aceptó la cotización/.test(m.texto)?'is-win':''}`}><span className="v7-av">{name(m.usuario).charAt(0).toUpperCase()}</span><div>
        {!cont&&<div className="v7-msg-head"><strong>{m.usuario===data?.yo?'Vos':name(m.usuario)}</strong><time>{fecha(m.creado_en)}</time></div>}
        <div className="v7-msg-text">{render(m.texto)}</div>
        {m.gestion&&<button type="button" className="v7-gestion" onClick={()=>goGestion(m.gestion!)}><FolderOpen size={14}/><span><b>{m.gestion.codigo}</b> · {m.gestion.cliente} · {m.gestion.titulo}</span></button>}

@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 Estado = Literal["nueva", "contactada", "cotizada", "negociacion", "ganada", "perdida"]
 TipoInteraccion = Literal["consulta", "correo", "llamada", "reunion", "nota"]
-TipoConsulta = Literal["sin_clasificar", "fabricacion_terceros", "desarrollo_formula", "elaboracion_envasado", "mayorista", "otro"]
+TipoConsulta = Literal["sin_clasificar", "fabricacion_terceros", "produccion_terceros", "otros_servicios", "desarrollo_formula", "elaboracion_envasado", "mayorista", "otro"]
 CanalOrigen = Literal["Manual", "WhatsApp", "Correo", "Formulario web", "Teléfono", "Otro"]
 
 class NuevaOportunidad(BaseModel):

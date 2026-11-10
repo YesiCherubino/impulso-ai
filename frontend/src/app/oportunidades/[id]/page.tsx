@@ -5,7 +5,7 @@ import {useCallback,useEffect,useState} from 'react';
 import {ArrowLeft,CalendarDays,ChevronDown,ContactRound,History,MessageCircle} from 'lucide-react';
 import Shell from '@/components/shell';
 import CaseDialog from '@/components/case-dialog';
-import {api,Detalle,dateAR,FichaConsulta,UsuarioSesion,estadoGestionNombre,esCerrada,ESTADOS_ABIERTOS,cotizacionTexto} from '@/lib/api';
+import {api,Detalle,dateAR,FichaConsulta,UsuarioSesion,estadoGestionNombre,esCerrada,ESTADOS_ABIERTOS,cotizacionTexto,puede} from '@/lib/api';
 
 export default function DetailPage(){
  const params=useParams<{id:string}>(); const id=Number(params.id);
@@ -29,7 +29,7 @@ export default function DetailPage(){
  }catch(e){setScheduleMessage(e instanceof Error?e.message:'No se pudo programar el seguimiento')}finally{setScheduleSaving(false)}}
  async function saveProfile(e:React.FormEvent){e.preventDefault();setProfileSaving(true);setError('');try{await api(`/api/opportunities/${id}/profile`,{method:'POST',body:JSON.stringify(profile)});await load()}
  catch(e){setError(e instanceof Error?e.message:'No se pudo actualizar la ficha')}finally{setProfileSaving(false)}}
- const readonly=user?.role==='gerencia';
+ const readonly=!puede(user,'contactos');
  const activeCases=fichas.filter(f=>!esCerrada(f.estado_gestion));
  // El estado comercial vive en cada gestión; acá se muestra el de la gestión abierta más avanzada.
  const leadState=activeCases.map(f=>f.estado_gestion||'sin_atender').sort((a,b)=>ESTADOS_ABIERTOS.indexOf(b as never)-ESTADOS_ABIERTOS.indexOf(a as never))[0]||fichas[0]?.estado_gestion||'';

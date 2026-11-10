@@ -201,6 +201,8 @@ def _conversation_filters(params: dict, user, lote: int):
         where.append('a.c_web=1')
     owner = params.get('responsable') or 'todos'
     me = user['username'] if user else ''
+    if params.get('_solo_propias'):
+        where.append("(x.responsable=? OR x.responsable='')"); args.append(me)
     if owner == 'mias':
         where.append('x.responsable=?'); args.append(me)
     elif owner == 'mias_y_libres':
@@ -227,6 +229,9 @@ def _conversation_filters(params: dict, user, lote: int):
 
 
 def list_conversations(con, params: dict, user=None, limit=50, offset=0) -> dict:
+    from .permisos import allowed
+    if user and not allowed(con, user, 'ver_todas'):
+        params = {**params, '_solo_propias': True}
     lote = lote_minimo(con)
     where, args = _conversation_filters(params, user, lote)
     prefilter = PREFILTERS.get(params.get('estado') or 'abiertas', '')
@@ -370,8 +375,10 @@ def register_escala(app: FastAPI, db_path):
     @app.post('/api/inbox/conversations/{conv}/read')
     def conversation_read(conv: int, request: Request):
         user = current(request, db_path)
-        if user and user['role'] == 'gerencia':
-            return {'ok': True}  # Gerencia consulta sin cambiar el estado de lectura.
+        from .permisos import allowed
+        with connect(db_path) as con:
+            if not allowed(con, user, 'responder'):
+                return {'ok': True}  # Quien solo consulta no cambia el estado de lectura.
         with connect(db_path) as con:
             ids = conversation_case_ids(con, conv)
             if ids:

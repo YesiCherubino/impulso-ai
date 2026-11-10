@@ -32,7 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_agenda_ficha ON actividades_comerciales(ficha_id)
 CREATE TABLE IF NOT EXISTS ia_configuracion (
  id INTEGER PRIMARY KEY CHECK(id = 1),
  tono TEXT NOT NULL DEFAULT 'profesional',
- tratamiento TEXT NOT NULL DEFAULT 'ustedes',
+ tratamiento TEXT NOT NULL DEFAULT 'vos',
  signos_apertura INTEGER NOT NULL DEFAULT 1,
  extension TEXT NOT NULL DEFAULT 'media',
  instrucciones TEXT NOT NULL DEFAULT ''
@@ -88,7 +88,7 @@ class Activity(BaseModel):
 
 class AISettings(BaseModel):
     tono: Literal['formal','profesional','cercano']='profesional'
-    tratamiento: Literal['vos','tu','ustedes']='ustedes'
+    tratamiento: Literal['vos','tu','ustedes']='vos'
     signos_apertura: bool=True
     extension: Literal['breve','media','detallada']='media'
     instrucciones: str=Field(default='',max_length=1000)
@@ -294,7 +294,7 @@ def register_business_v3(app:FastAPI,db_path:Path):
     @app.post('/api/calendar/events',status_code=201)
     def calendar_add(request:Request,payload:Activity):
         user=current(request,db_path)
-        if user and user['role']=='gerencia':raise HTTPException(403,'Gerencia solo consulta')
+        from .permisos import require as _req; _req(db_path,user,'gestionar')
         if payload.fin and payload.fin<=payload.inicio:raise HTTPException(422,'La fecha de fin debe ser posterior al inicio')
         owner=user['username'] if user and user['role']=='ventas' else (payload.responsable or (user['username'] if user else ''))
         with connect(db_path) as con:
@@ -311,7 +311,7 @@ def register_business_v3(app:FastAPI,db_path:Path):
     @app.post('/api/calendar/events/{event_id}')
     def calendar_edit(event_id:int,request:Request,payload:Activity):
         user=current(request,db_path)
-        if user and user['role']=='gerencia':raise HTTPException(403,'Gerencia solo consulta')
+        from .permisos import require as _req; _req(db_path,user,'gestionar')
         if payload.fin and payload.fin<=payload.inicio:raise HTTPException(422,'La fecha de fin debe ser posterior al inicio')
         with connect(db_path) as con:
             row=con.execute('SELECT * FROM actividades_comerciales WHERE id=?',(event_id,)).fetchone()
@@ -327,7 +327,7 @@ def register_business_v3(app:FastAPI,db_path:Path):
     def set_case_status(ficha_id:int,request:Request,payload:CaseStatus):
         from .business_v4 import ESTADO_LEGACY,MOTIVOS_NO_CONCRETADA
         user=current(request,db_path)
-        if user and user['role']=='gerencia':raise HTTPException(403,'Gerencia solo consulta')
+        from .permisos import require as _req; _req(db_path,user,'gestionar')
         estado=ESTADO_LEGACY.get(payload.estado,payload.estado)
         motivo=payload.motivo.strip()
         with connect(db_path) as con:
@@ -349,6 +349,12 @@ def register_business_v3(app:FastAPI,db_path:Path):
             values={'estado_gestion':estado,'cerrada_en':stamp() if closed else None,
                     'motivo_cierre':motivo if closed else '','actualizada_en':stamp(),**quote}
             con.execute(f"UPDATE fichas_consulta SET {', '.join(k+'=?' for k in values)} WHERE id=?",(*values.values(),ficha_id))
+            if estado!=row['estado_gestion']:
+                from .historial import log
+                from .equipo import announce_close
+                detalle=motivo if estado=='no_concretada' else (f"{quote['cotizacion_moneda']} {quote['cotizacion_monto']}" if quote else '')
+                log(con,ficha_id,'estado',estado,detalle,user['username'] if user else '')
+                if estado=='concretada' and user:announce_close(con,ficha_id,user['username'])
             return {'id':ficha_id,'estado':estado,'codigo':row['codigo']}
 
     @app.get('/api/fichas/{ficha_id}/checklists')
@@ -368,7 +374,7 @@ def register_business_v3(app:FastAPI,db_path:Path):
     @app.post('/api/fichas/{ficha_id}/checklists')
     def save_checklists(ficha_id:int,request:Request,payload:ChecklistData):
         user=current(request,db_path)
-        if user and user['role']=='gerencia':raise HTTPException(403,'Gerencia solo consulta')
+        from .permisos import require as _req; _req(db_path,user,'gestionar')
         def clean(items):
             out=[]
             for item in items:
@@ -452,7 +458,7 @@ def register_business_v3(app:FastAPI,db_path:Path):
     @app.post('/api/inbox/{message_id}/new-case')
     def start_new_case(message_id:int,request:Request,payload:dict):
         user=current(request,db_path)
-        if user and user['role']=='gerencia':raise HTTPException(403,'Gerencia solo consulta')
+        from .permisos import require as _req; _req(db_path,user,'gestionar')
         title=str(payload.get('titulo','Nueva gestión')).strip()[:200]
         with connect(db_path) as con:
             m=con.execute('SELECT * FROM bandeja_consultas WHERE id=?',(message_id,)).fetchone()

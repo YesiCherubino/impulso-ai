@@ -96,7 +96,8 @@ def report_data(con, *, period='mes', canal='todos', responsable='', user=None) 
     since_iso = period_since(period, today).isoformat()
     role = user['role'] if user else 'administrador'
     responsible = (responsable or '').strip()
-    if role == 'ventas':
+    from .permisos import allowed
+    if user and not allowed(con, user, 'reportes_todos'):
         responsible = user['username']
     base, args = case_filter(canal, responsible)
     open_base = f'{base} AND f.estado_gestion IN {OPEN_SQL}'
@@ -226,3 +227,59 @@ def report_data(con, *, period='mes', canal='todos', responsable='', user=None) 
 def page(sql: str, limit: int) -> str:
     from .escala import page_sql
     return page_sql(sql, limit, 0)
+
+
+INDICADORES_DETALLE = ('consultas_recibidas', 'no_leidas', 'sin_atender', 'en_gestion', 'contactos_activos', 'concretadas',
+                       'no_concretadas', 'seguimientos_vencidos', 'sin_contacto_7_dias')
+
+
+def report_detail(con, indicador: str, *, period='mes', canal='todos', responsable='', user=None, limit=50) -> dict:
+    """Las gestiones que forman cada número del resumen comercial (mismos filtros que report_data)."""
+    from .permisos import allowed
+    today = date.today()
+    since_iso = period_since(period, today).isoformat()
+    responsible = (responsable or '').strip()
+    if user and not allowed(con, user, 'reportes_todos'):
+        responsible = user['username']
+    base, args = case_filter(canal, responsible)
+    open_base = f'{base} AND f.estado_gestion IN {OPEN_SQL}'
+    cond, extra, order = None, [], 'f.actualizada_en DESC'
+    if indicador == 'consultas_recibidas':
+        cond = f'''{base} AND EXISTS (SELECT 1 FROM bandeja_consultas b WHERE b.ficha_id=f.id AND b.direccion<>'saliente' AND b.recibido_el>=?)'''
+        extra, order = [since_iso], 'f.ultimo_entrante_en DESC'
+    elif indicador == 'no_leidas':
+        cond, order = f'{base} AND f.no_leidos_count>0', 'f.ultimo_entrante_en DESC'
+    elif indicador == 'sin_atender':
+        cond, order = f"{base} AND f.estado_gestion='sin_atender'", 'f.creada_en'
+    elif indicador == 'en_gestion':
+        cond = f"{open_base} AND f.estado_gestion<>'sin_atender'"
+    elif indicador == 'contactos_activos':
+        cond = f'{open_base} AND f.oportunidad_id IS NOT NULL'
+    elif indicador in ('concretadas', 'no_concretadas'):
+        estado = 'concretada' if indicador == 'concretadas' else 'no_concretada'
+        cond, extra, order = f"{base} AND f.estado_gestion='{estado}' AND f.cerrada_en>=?", [since_iso], 'f.cerrada_en DESC'
+    elif indicador == 'seguimientos_vencidos':
+        rows = list_seguimientos_vencidos(con, responsible)
+        return {'total': len(rows), 'items': [{'ficha_id': r['ficha_id'], 'codigo': r['ficha_codigo'] or '', 'cliente': r['cliente'],
+                                               'titulo': r['titulo'], 'estado_gestion': '', 'responsable': r['responsable'],
+                                               'fecha': r['inicio'], 'conversacion': str(r['conv']) if r['conv'] is not None else ''}
+                                              for r in rows[:limit]]}
+    elif indicador == 'sin_contacto_7_dias':
+        limit_contact = (today - timedelta(days=DIAS_SIN_CONTACTO)).isoformat()
+        rows = con.execute(f'''SELECT o.* FROM oportunidades o WHERE o.fusionada_con IS NULL AND o.fecha_seguimiento IS NULL
+                AND o.ultimo_contacto<=? {"AND LOWER(o.responsable)=LOWER(?)" if responsible else ""}
+                AND EXISTS (SELECT 1 FROM fichas_consulta f WHERE f.oportunidad_id=o.id AND {open_base}) ORDER BY o.ultimo_contacto''',
+                           [limit_contact, *([responsible] if responsible else []), *args]).fetchall()
+        return {'total': len(rows), 'items': [{'ficha_id': None, 'oportunidad_id': r['id'], 'codigo': '', 'cliente': r['cliente'],
+                                               'titulo': r['contacto'], 'estado_gestion': '', 'responsable': r['responsable'],
+                                               'fecha': r['ultimo_contacto'], 'conversacion': str(r['id'])} for r in rows[:limit]]}
+    else:
+        raise ValueError('Indicador desconocido')
+    total = con.execute(f'SELECT COUNT(*) FROM fichas_consulta f WHERE {cond}', [*args, *extra]).fetchone()[0]
+    from .escala import page_sql
+    rows = con.execute(page_sql(f'SELECT f.* FROM fichas_consulta f WHERE {cond} ORDER BY {order}', int(limit), 0), [*args, *extra]).fetchall()
+    return {'total': total, 'items': [{'ficha_id': r['id'], 'codigo': r['codigo'], 'cliente': r['cliente'], 'titulo': r['titulo'],
+                                       'estado_gestion': r['estado_gestion'], 'responsable': r['responsable'],
+                                       'fecha': r['cerrada_en'] if indicador in ('concretadas', 'no_concretadas') else (r['ultimo_mensaje_en'] or r['actualizada_en']),
+                                       'monto': r['cotizacion_monto'], 'moneda': r['cotizacion_moneda'],
+                                       'conversacion': str(r['oportunidad_id'] if r['oportunidad_id'] else -r['id'])} for r in rows]}

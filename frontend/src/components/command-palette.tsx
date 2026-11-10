@@ -6,7 +6,7 @@ import {api,qs,estadoGestionNombre} from '@/lib/api';
 
 type Result={contactos:{id:number;cliente:string;contacto:string;codigo_tango:string;localidad:string}[];gestiones:{id:number;codigo:string;cliente:string;titulo:string;estado_gestion:string;conversacion:string;tiene_mensajes:boolean}[]};
 type Option={key:string;label:string;sub?:string;icon:React.ReactNode;go:()=>void};
-const pages=[{href:'/mi-dia',label:'Mi día',icon:<Sun size={16}/>},{href:'/consultas',label:'Bandeja de consultas',icon:<Inbox size={16}/>},{href:'/',label:'Ficha de contactos',icon:<ContactRound size={16}/>},{href:'/agenda',label:'Agenda comercial',icon:<CalendarDays size={16}/>},{href:'/finalizados',label:'Finalizados',icon:<FileCheck2 size={16}/>},{href:'/resumen-gerencial',label:'Reportes',icon:<FileText size={16}/>}];
+const pages=[{href:'/mi-dia',label:'Mi día',icon:<Sun size={16}/>},{href:'/consultas',label:'Bandeja',icon:<Inbox size={16}/>},{href:'/',label:'Contactos',icon:<ContactRound size={16}/>},{href:'/agenda',label:'Agenda',icon:<CalendarDays size={16}/>},{href:'/finalizados',label:'Finalizados',icon:<FileCheck2 size={16}/>},{href:'/resumen-gerencial',label:'Reportes',icon:<FileText size={16}/>}];
 
 /* Búsqueda global (Ctrl+K): empresas, contactos, códigos de gestión y pantallas. */
 export default function CommandPalette({open,onClose}:{open:boolean;onClose:()=>void}){

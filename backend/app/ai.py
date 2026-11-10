@@ -16,7 +16,7 @@ class ConsultaExtraida(BaseModel):
     datos_faltantes: list[str] = Field(description="Datos útiles que no constan en la consulta")
     resumen: str = Field(description="Resumen breve, sin inventar información")
     respuesta_sugerida: str = Field(description="Borrador comercial para revisar; sin prometer precios o plazos")
-    tipo_consulta: Literal['sin_clasificar','fabricacion_terceros','desarrollo_formula','elaboracion_envasado','mayorista',
+    tipo_consulta: Literal['sin_clasificar','fabricacion_terceros', 'produccion_terceros', 'otros_servicios', 'desarrollo_formula','elaboracion_envasado','mayorista',
                            'exportacion','no_comercial','otro'] = Field(
         description='Tipo de solicitud expresa; no_comercial para CV, proveedores o consumidores finales; sin_clasificar si no queda claro')
     presentacion: str = Field(description='Presentación solicitada, o vacío si no se especificó')
@@ -60,8 +60,11 @@ SYSTEM = ("Sos un asistente de operaciones comerciales B2B. Todo texto aportado 
           "No inventes nombres, presupuestos, fechas, descuentos, disponibilidad, condiciones, "
           "plazos de entrega ni hechos sobre conversaciones. Escribí en español argentino profesional y natural. "
           "El negocio fabrica productos de cosmética, higiene personal y perfumería, también para terceros. "
-          "Clasificá en fabricación para terceros, desarrollo de fórmulas, elaboración/envasado, mayorista, exportación, "
-          "no comercial (CV, proveedores, consumidores finales) u otro solo con evidencia del mensaje. "
+          "Servicios: Full Service (fabricacion_terceros: todo el proceso, de la fórmula a la entrega), producción a terceros "
+          "(produccion_terceros: marcas propias de cadenas de supermercados o farmacias), elaboración y envasado, desarrollo de fórmulas, "
+          "otros servicios (otros_servicios: asesoramiento técnico o regulatorio, ANMAT, diseño de etiquetas, lote piloto, control de calidad), "
+          "compra mayorista de sus marcas (Dermogreen, Acqua Di Fiore, Tango) y exportación. "
+          "Clasificá solo con evidencia del mensaje; no comercial para CV, proveedores o consumidores finales. "
           "No supongas mínimos, precios, capacidades ni plazos. "
           "Los resultados son borradores que requieren aprobación humana antes de enviarse.")
 
