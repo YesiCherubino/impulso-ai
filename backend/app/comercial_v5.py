@@ -213,6 +213,13 @@ def followups_due(con, owner_clause: str, args: list, days: int) -> list[dict]:
     return out
 
 
+def pending_item(r, lote) -> dict:
+    return {'ficha_id': r['id'], 'codigo': r['codigo'], 'cliente': r['cliente'], 'titulo': r['titulo'],
+            'horas': response_from_row(r)['horas'], 'responsable': r['responsable'],
+            'bajo_minimo': r['tipo_consulta'] in TIPOS_CON_LOTE_MINIMO and r['cantidad'] is not None and r['cantidad'] < lote,
+            'conversacion': str(conv_key(r))}
+
+
 def my_day(con, user) -> dict:
     username = user['username'] if user else ''
     role = user['role'] if user else 'administrador'
@@ -224,10 +231,19 @@ def my_day(con, user) -> dict:
         owner, args, act_owner, act_args = '', [], '', []
     cfg = empresa(con)
     lote = lote_minimo(con)
-    sin_responder = con.execute(page_sql(f'''SELECT f.* FROM fichas_consulta f WHERE f.estado_gestion IN {OPEN_SQL}
-               AND f.pendiente_desde IS NOT NULL {owner} ORDER BY f.pendiente_desde''', 12, 0), args).fetchall()
-    total_sin_responder = con.execute(f'''SELECT COUNT(*) FROM fichas_consulta f WHERE f.estado_gestion IN {OPEN_SQL}
-               AND f.pendiente_desde IS NOT NULL {owner}''', args).fetchone()[0]
+    # Primero lo asignado al usuario; después lo que nadie tomó todavía.
+    pend = f"f.estado_gestion IN {OPEN_SQL} AND f.pendiente_desde IS NOT NULL"
+    def pending(cond, cargs, limit=12):
+        rows = con.execute(page_sql(f'SELECT f.* FROM fichas_consulta f WHERE {pend} AND {cond} ORDER BY f.pendiente_desde', limit, 0), cargs).fetchall()
+        total = con.execute(f'SELECT COUNT(*) FROM fichas_consulta f WHERE {pend} AND {cond}', cargs).fetchone()[0]
+        return rows, total
+    mias, total_mias = pending('f.responsable=?', [username])
+    libres, total_libres = pending("f.responsable=''", [])
+    # Administración y gerencia también ven cuántas tienen pendientes los demás vendedores.
+    otros = 0 if role == 'ventas' else con.execute(
+        f"SELECT COUNT(*) FROM fichas_consulta f WHERE {pend} AND f.responsable<>'' AND f.responsable<>?", [username]).fetchone()[0]
+    asignadas = con.execute(f'SELECT COUNT(*) FROM fichas_consulta f WHERE f.estado_gestion IN {OPEN_SQL} AND f.responsable=?',
+                            [username]).fetchone()[0]
     now = datetime.now(timezone.utc)
     start = datetime.combine(date.today(), datetime.min.time(), tzinfo=timezone.utc) - timedelta(hours=3)
     end = start + timedelta(days=1)
@@ -261,12 +277,11 @@ def my_day(con, user) -> dict:
     sin_asignar = con.execute(f"SELECT COUNT(*) FROM fichas_consulta f WHERE f.estado_gestion IN {OPEN_SQL} AND f.responsable=''").fetchone()[0]
     return {
         'usuario': username, 'fecha': date.today().isoformat(),
-        'resumen': {'sin_responder': total_sin_responder, 'actividades_hoy': len(hoy), 'vencidas': len(vencidas),
+        'resumen': {'asignadas': asignadas, 'mias_sin_responder': total_mias, 'sin_asignar_sin_responder': total_libres,
+                    'otros_sin_responder': otros, 'sin_responder': total_mias + total_libres + otros, 'actividades_hoy': len(hoy), 'vencidas': len(vencidas),
                     'cotizaciones_por_vencer': len(por_vencer), 'nuevas_hoy': nuevas_hoy, 'sin_asignar': sin_asignar},
-        'sin_responder': [{'ficha_id': r['id'], 'codigo': r['codigo'], 'cliente': r['cliente'], 'titulo': r['titulo'],
-                           'horas': response_from_row(r)['horas'], 'responsable': r['responsable'],
-                           'bajo_minimo': r['tipo_consulta'] in TIPOS_CON_LOTE_MINIMO and r['cantidad'] is not None and r['cantidad'] < lote,
-                           'conversacion': str(conv_key(r))} for r in sin_responder],
+        'mias_sin_responder': [pending_item(r, lote) for r in mias],
+        'sin_asignar_sin_responder': [pending_item(r, lote) for r in libres],
         'actividades_hoy': hoy, 'actividades_vencidas': vencidas[:15],
         'cotizaciones_por_vencer': por_vencer[:15],
         'seguimientos_sugeridos': followups_due(con, owner, args, int(cfg['dias_seguimiento']))[:15],

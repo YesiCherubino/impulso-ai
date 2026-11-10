@@ -85,9 +85,10 @@ export type NotaInterna={id:number;ficha_id:number;usuario:string;texto:string;a
 export type Empresa={razon_social:string;domicilio:string;telefono:string;email:string;web:string;cuit:string;condiciones:string;iva_pct:number;dias_seguimiento:number;probabilidades:Record<string,number>;areas?:string[]};
 export type ItemMiDia={ficha_id:number;codigo:string;cliente:string;titulo?:string;conversacion:string};
 export type ActividadMiDia={id:number;titulo:string;tipo:string;inicio:string;fin:string|null;cliente:string;ficha_id:number|null;oportunidad_id:number|null;responsable:string;notas:string;ficha_codigo:string|null;conversacion:string};
+export type PendienteMiDia=ItemMiDia&{horas:number;responsable:string;bajo_minimo:boolean};
 export type MiDia={usuario:string;fecha:string;dias_seguimiento:number;
- resumen:{sin_responder:number;actividades_hoy:number;vencidas:number;cotizaciones_por_vencer:number;nuevas_hoy:number;sin_asignar:number};
- sin_responder:(ItemMiDia&{horas:number;responsable:string;bajo_minimo:boolean})[];
+ resumen:{asignadas:number;mias_sin_responder:number;sin_asignar_sin_responder:number;otros_sin_responder:number;sin_responder:number;actividades_hoy:number;vencidas:number;cotizaciones_por_vencer:number;nuevas_hoy:number;sin_asignar:number};
+ mias_sin_responder:PendienteMiDia[];sin_asignar_sin_responder:PendienteMiDia[];
  actividades_hoy:ActividadMiDia[];actividades_vencidas:ActividadMiDia[];
  cotizaciones_por_vencer:(ItemMiDia&{vence:string;vencida:boolean;monto:number|null;moneda:string})[];
  seguimientos_sugeridos:(ItemMiDia&{dias:number;cotizacion:{monto:number|null;moneda:string};mensaje_id:number|null})[]};

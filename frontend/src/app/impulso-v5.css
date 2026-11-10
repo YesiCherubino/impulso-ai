@@ -311,3 +311,7 @@ html[data-theme='dark'] .v2-office .v4-message-bubble.is-outgoing{background:var
 .v6-notes{max-height:46%;overflow-y:auto;flex-shrink:0}
 .v5-composer{grid-template-columns:minmax(0,1fr)}
 @media(max-width:720px){.v5-ai-button,.v6-attach{width:40px;height:40px}.v5-composer-row{gap:6px}}
+.v6-kpi.is-warn{border-color:var(--v5-warn-ink)}
+.v6-kpi.is-warn strong,.v6-kpi.is-warn>svg{color:var(--v5-warn-ink)}
+.v6-kpi .v6-kpi-hint{font-size:10.5px;line-height:1.3;opacity:.85}
+.v6-others{grid-column:1/-1;margin:0;font-size:12.5px}

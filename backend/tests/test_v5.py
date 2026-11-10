@@ -53,8 +53,14 @@ def test_mi_dia_and_followup_suggestion(tmp_path, monkeypatch):
         h = login(c)
         msg = new_case(c, h)
         d = c.get('/api/mi-dia', headers=h).json()
-        assert d['resumen']['sin_responder'] >= 1
-        assert any(x['ficha_id'] == msg['ficha_id'] for x in d['sin_responder'])
+        assert d['resumen']['sin_asignar_sin_responder'] >= 1
+        assert any(x['ficha_id'] == msg['ficha_id'] for x in d['sin_asignar_sin_responder'])
+        # Al asignármela pasa a "Mías sin responder".
+        assert c.post(f"/api/fichas/{msg['ficha_id']}/responsable", headers=h, json={'responsable': 'admin'}).status_code == 200
+        d = c.get('/api/mi-dia', headers=h).json()
+        assert any(x['ficha_id'] == msg['ficha_id'] for x in d['mias_sin_responder'])
+        assert not any(x['ficha_id'] == msg['ficha_id'] for x in d['sin_asignar_sin_responder'])
+        assert d['resumen']['asignadas'] >= 1
         # Se cotiza y se responde; luego pasan 6 días sin respuesta del cliente.
         r = c.post(f"/api/fichas/{msg['ficha_id']}/cotizaciones", headers=h, json={
             'moneda': 'USD', 'items': [{'descripcion': 'Elaboración', 'cantidad': 3000, 'precio_unitario': 0.85}]})
@@ -67,7 +73,7 @@ def test_mi_dia_and_followup_suggestion(tmp_path, monkeypatch):
         d = c.get('/api/mi-dia', headers=h).json()
         sug = [x for x in d['seguimientos_sugeridos'] if x['ficha_id'] == msg['ficha_id']]
         assert sug and sug[0]['dias'] >= 5 and sug[0]['cotizacion']['moneda'] == 'USD'
-        assert not any(x['ficha_id'] == msg['ficha_id'] for x in d['sin_responder'])
+        assert not any(x['ficha_id'] == msg['ficha_id'] for x in d['mias_sin_responder'])
         # El borrador de seguimiento le indica a la IA el objetivo.
         calls = []
         c.app.state.analizar_consulta = lambda t: calls.append(t) or ConsultaExtraida(
