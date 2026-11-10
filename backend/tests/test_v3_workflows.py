@@ -16,18 +16,18 @@ def test_demo_seed_idempotent_with_web_and_threads(tmp_path,monkeypatch):
         hdr={'X-Session-Token':token}
         first=c.post('/api/demo/seed',headers=hdr,json={'incluir_web':True})
         assert first.status_code==200,first.text
-        assert first.json()['added']==35
+        assert first.json()['added']==40  # 35 de V3 + 5 casos del rubro (V4)
         second=c.post('/api/demo/seed',headers=hdr,json={'incluir_web':True})
         assert second.status_code==200 and second.json()['added']==0
         threads=c.get('/api/inbox/threads',headers=hdr)
         assert threads.status_code==200,threads.text
         actual=threads.json()
         with connect(path) as con:
-            assert con.execute("SELECT COUNT(*) FROM fixtures_v3").fetchone()[0]==35
-            assert con.execute("SELECT COUNT(DISTINCT cliente) FROM bandeja_consultas WHERE id IN (SELECT mensaje_id FROM fixtures_v3)").fetchone()[0]==20
+            assert con.execute("SELECT COUNT(*) FROM fixtures_v3").fetchone()[0]==40
+            assert con.execute("SELECT COUNT(DISTINCT cliente) FROM bandeja_consultas WHERE id IN (SELECT mensaje_id FROM fixtures_v3)").fetchone()[0]==25
             web=con.execute("SELECT COUNT(*) FROM bandeja_consultas WHERE canal='Formulario web'").fetchone()[0]
-            assert web==5
-            assert con.execute("SELECT COUNT(*) FROM oportunidades WHERE notas='Ejemplo ficticio de Impulso V3'").fetchone()[0]==20
+            assert web==6  # 5 de V3 + 1 CV por formulario (V4)
+            assert con.execute("SELECT COUNT(*) FROM oportunidades WHERE notas='Ejemplo ficticio de Impulso V3'").fetchone()[0]==25
         assert any(len(t['mensajes'])>=3 for t in actual)
         assert any(m['canal']=='Correo' for t in actual for m in t['mensajes'])
         assert any(m['canal']=='WhatsApp' for t in actual for m in t['mensajes'])

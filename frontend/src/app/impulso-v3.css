@@ -105,3 +105,26 @@ html[data-theme='dark'] .v2-office .v4-contact-case:hover{background:#2b353b;bor
 html[data-theme='dark'] .v2-office .v4-contact-avatar,html[data-theme='dark'] .v2-office .v4-contact-case-icon{background:#2e383e}
 @media(max-width:720px){.v2-office .v4-chat-modal{width:100vw;height:100dvh;max-height:100dvh;border-radius:0}.v4-chat-header{padding:12px 14px}.v4-chat-context{padding:8px 12px}.v4-chat-transcript{padding:15px 13px}.v4-message-bubble{max-width:94%}.v4-chat-draft{width:94%}.v4-chat-footer{padding:10px 12px}.v4-chat-primary-actions{flex:1}.v4-contact-header{align-items:flex-start}.v4-contact-status{width:100%}.v4-contact-case{padding:12px;gap:10px}.v4-contact-case-icon{display:none}.v4-contact-case-copy strong{white-space:normal}.v4-case-status{font-size:9px}.v4-contact-page{padding-bottom:20px}}
 @media(prefers-reduced-motion:reduce){.v4-light-summary svg:last-child{transition:none}}
+
+/* V3 refinement: chat should remain usable on keyboard, and menu opens ABOVE the footer. */
+.v4-more-popover{top:auto;bottom:calc(100% + 8px);z-index:70;max-height:min(55vh,400px)}
+.v4-chat-draft textarea{font-size:inherit;line-height:1.5;font-size:13px}
+.v4-chat-draft textarea:focus-visible{outline:2px solid var(--v3-accent);outline-offset:2px}
+.v4-chat-empty{align-self:center;padding:40px 12px;color:var(--v3-muted);font-size:13px}
+.v2-office .v2-inbox-toolbar:has(>.search:only-child){padding:12px 16px}
+.v2-office .v2-inbox-toolbar:has(>.search:only-child) .search{max-width:none}
+
+/* Compact, accessible notifications with a visible dismiss and bulk-read action. */
+.v2-office .notification-widget{z-index:90}
+.v2-office .notification-popover{z-index:100}
+.v2-office .notification-heading{gap:12px}
+.v2-office .notification-heading-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.v2-office .notification-heading-actions button{display:inline-flex;align-items:center;justify-content:center;gap:5px;border-radius:6px;padding:6px;cursor:pointer}
+.v2-office .notification-heading-actions button:disabled{opacity:.55;cursor:default}
+.v2-office .notification-error{margin:0;padding:8px 13px;font-size:12px;color:#b6574e}
+html[data-theme='dark'] .v2-office .notification-popover{background:#252d32;border-color:#3a464d;box-shadow:0 18px 38px rgba(0,0,0,.3);color:#edf0f1}
+html[data-theme='dark'] .v2-office .notification-item{background:#293238;color:#edf0f1;border-color:#3a464d}
+html[data-theme='dark'] .v2-office .notification-item.is-read{background:#252d32}
+html[data-theme='dark'] .v2-office .notification-item:hover{background:#333f45}
+html[data-theme='dark'] .v2-office .notification-item-body small{color:#b6c4c8}
+@media(max-width:620px){.v2-office .notification-popover{position:fixed;right:12px;left:12px;top:55px;width:auto;max-height:calc(100dvh - 80px)}}

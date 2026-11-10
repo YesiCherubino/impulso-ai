@@ -1,0 +1,105 @@
+/* Impulso V4 (Pasmanter): pipeline, prioridad, calificación, respuestas registradas y reportes de gerencia.
+   Usa los tokens --v3-* existentes; solo agrega colores de estado con su variante oscura. */
+.v2-office{--v5-warn-bg:#fbf1dd;--v5-warn-ink:#8a5a12;--v5-danger-bg:#f8e3df;--v5-danger-ink:#9b3f31;--v5-info-bg:#e6f0f3;--v5-info-ink:#2a5866;--v5-ok-ink:#3f7360;--v5-out-bg:#e8f1ef}
+html[data-theme='dark'] .v2-office{--v5-warn-bg:#3b3020;--v5-warn-ink:#f0c879;--v5-danger-bg:#412824;--v5-danger-ink:#f3aa9d;--v5-info-bg:#203238;--v5-info-ink:#9fd0dd;--v5-ok-ink:#93cbb4;--v5-out-bg:#25373a}
+
+/* Chips */
+.v5-chips{display:flex;flex-wrap:wrap;gap:5px;margin:3px 0 2px}
+.v5-chip{display:inline-flex;align-items:center;gap:4px;border-radius:11px;padding:3px 8px;font-size:10.5px;line-height:1.3;color:var(--v3-muted);background:var(--v3-panel-alt);border:1px solid var(--v3-border);white-space:nowrap}
+.v5-chip.is-state{color:var(--v3-ink);font-weight:600}
+.v5-chip.is-sin_atender{background:var(--v5-info-bg);color:var(--v5-info-ink);border-color:transparent}
+.v5-chip.is-cotizada,.v5-chip.is-muestra_piloto{color:var(--v5-ok-ink)}
+.v5-chip.is-warning{background:var(--v5-warn-bg);color:var(--v5-warn-ink);border-color:transparent}
+.v5-chip.is-attention{background:var(--v5-warn-bg);color:var(--v5-warn-ink);border-color:transparent}
+.v5-chip.is-danger{background:var(--v5-danger-bg);color:var(--v5-danger-ink);border-color:transparent;font-weight:600}
+.v5-chip.is-ai{color:var(--v5-info-ink);background:var(--v5-info-bg);border-color:transparent}
+.v5-chip.is-money{color:var(--v5-ok-ink);font-weight:600}
+.v3-conversation.is-low{opacity:.72}
+.v3-conversation-body{min-width:0}
+
+/* Filtros de bandeja */
+.v5-filter-row{display:flex;flex-wrap:wrap;gap:8px}
+.v5-filter-row select{min-width:150px}
+
+/* Selector de estado */
+.v5-status-select{max-width:100%}
+.v5-status-select.is-compact{font-size:12px;padding:5px 8px;min-height:0;height:auto}
+.v5-front{z-index:120}
+.v5-small-modal{max-width:440px}
+.v5-reason-list{display:grid;gap:7px}
+.v5-reason{display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer}
+.btn.btn-sm{padding:5px 10px;font-size:12px;min-height:0;gap:5px}
+
+/* Contexto del chat */
+.v5-context-tools{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.v4-chat-context{flex-wrap:wrap}
+.v5-chat-banner{margin:0;border-radius:0;flex-shrink:0;padding:10px 22px}
+.v4-chat-message-block.is-outgoing{align-items:flex-end}
+.v4-message-bubble.is-outgoing{background:var(--v5-out-bg);border-radius:13px 4px 13px 13px;cursor:default}
+html[data-theme='dark'] .v2-office .v4-message-bubble.is-outgoing{background:var(--v5-out-bg);border-color:#3b5257}
+.v5-check{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--v3-muted);margin:6px 0}
+.v5-loading{color:var(--v3-muted);font-size:13px}
+.v4-send-footer{flex-wrap:wrap}
+
+/* Banners */
+.v5-banner{display:flex;align-items:flex-start;gap:9px;padding:11px 13px;border-radius:8px;font-size:13px;line-height:1.45;margin:0 0 14px;flex-wrap:wrap}
+.v5-banner>svg{flex-shrink:0;margin-top:2px}
+.v5-banner.is-warning,.v5-banner.is-attention{background:var(--v5-warn-bg);color:var(--v5-warn-ink)}
+.v5-banner.is-info{background:var(--v5-info-bg);color:var(--v5-info-ink)}
+.v5-banner>div{display:grid;gap:7px;flex:1;min-width:0}
+.v5-banner>span{flex:1;min-width:180px}
+.v5-dup{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+
+/* Ficha de la gestión */
+.v5-case-bar{display:flex;flex-wrap:wrap;gap:14px 26px;padding:14px;border:1px solid var(--v3-border);border-radius:9px;background:var(--v3-panel-alt);margin-bottom:14px}
+.v5-case-bar-item{display:grid;gap:5px;min-width:150px}
+.v5-case-bar-item>small{font-size:11px;color:var(--v3-muted)}
+.v5-case-bar-item strong{font-size:13px;color:var(--v3-ink)}
+.v5-inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
+.v5-label-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.v5-pending-data{margin-top:14px;padding:12px 14px;border:1px dashed var(--v3-border);border-radius:8px}
+.v5-pending-data h4{margin:0 0 6px;font-size:13px}
+.v5-pending-data ul{margin:0;padding-left:18px;display:grid;gap:3px;font-size:13px;color:var(--v3-ink)}
+.v5-archive{margin-top:12px}
+.v3-bubble.v5-outgoing{background:var(--v5-out-bg);margin-left:12%}
+
+/* Tablero con el pipeline completo */
+.v3-board.v5-board{grid-template-columns:repeat(4,minmax(220px,1fr))}
+.v3-board-card.is-low{opacity:.78}
+.v3-board-card .v5-status-select{width:100%}
+
+/* Agenda: vencidos */
+.v5-overdue{display:grid;gap:10px}
+.v5-overdue h3{margin:4px 0 0;font-size:14px}
+.v3-event-line.is-overdue{border-color:var(--v5-danger-ink);background:var(--v5-danger-bg);color:var(--v3-ink)}
+
+/* Reportes */
+.v2-stat.is-alert{border-color:var(--v5-danger-ink)}
+.v2-stat.is-alert strong{color:var(--v5-danger-ink)}
+.v5-source{font-size:12px;margin:14px 0 0}
+.v5-report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;padding:20px;margin-top:18px}
+.v5-report-block{display:grid;gap:10px;align-content:start;min-width:0;overflow-x:auto}
+.v5-report-block.is-wide{grid-column:1/-1}
+.v5-report-block h3{display:flex;align-items:center;gap:8px;margin:0;font-size:15px}
+.v5-big{font-size:28px;font-weight:650;margin:0;color:var(--v3-ink)}
+.v5-mini-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.v5-mini-table th,.v5-mini-table td{padding:7px 8px;border-bottom:1px solid var(--v3-border);text-align:left}
+.v5-mini-table th{color:var(--v3-muted);font-weight:500;font-size:11.5px}
+.v5-alert-list{list-style:none;margin:0;padding:0;display:grid;gap:7px;font-size:13px}
+.v5-alert-list li{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:8px 10px;border-radius:7px;background:var(--v5-warn-bg);color:var(--v5-warn-ink)}
+.v5-alert-list a{color:inherit;text-decoration:underline}
+.v5-reason-bars{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:13px}
+.v5-reason-bars li{display:flex;justify-content:space-between;gap:10px;padding:7px 10px;border:1px solid var(--v3-border);border-radius:7px}
+
+@media(max-width:900px){.v3-board.v5-board{grid-template-columns:repeat(2,minmax(220px,1fr))}}
+@media(max-width:720px){
+ .v5-filter-row select{flex:1 1 140px;min-width:0}
+ .v5-context-tools{justify-content:flex-start;width:100%}
+ .v5-chat-banner{padding:9px 12px}
+ .v3-board.v5-board{grid-template-columns:minmax(240px,1fr)}
+ .v5-report-grid{padding:14px;grid-template-columns:1fr}
+ .v3-bubble.v5-outgoing{margin-left:0}
+}
+
+/* El título del mes ya llega con mayúscula inicial ("Noviembre de 2026"); capitalize ponía "De" en mayúscula. */
+.v2-office .v3-agenda-nav strong{text-transform:none}

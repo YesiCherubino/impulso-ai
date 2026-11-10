@@ -1,7 +1,8 @@
 'use client';
 import {useState, type FormEvent} from 'react';
 import {useRouter} from 'next/navigation';
-import {Eye,EyeOff,AlertCircle,PanelLeftClose} from 'lucide-react';
+import {Eye,EyeOff,AlertCircle} from 'lucide-react';
+import ImpulsoMark from '@/components/impulso-mark';
 import './login.css';
 import ThemeToggle from '@/components/theme-toggle';
 
@@ -35,7 +36,7 @@ export default function Login(){
   finally{setBusy(false)}
  }
  return <main className="login-screen"><div className="login-theme-control"><ThemeToggle/></div><form className="login-panel" onSubmit={signIn}>
-  <div className="login-brand"><span className="login-mark"><PanelLeftClose size={21} aria-hidden="true"/></span><span><strong>Impulso</strong><small>Gestión comercial</small></span></div>
+  <div className="login-brand"><span className="login-mark"><ImpulsoMark size={26}/></span><span><strong>Impulso</strong><small>Gestión comercial</small></span></div>
   <div className="login-heading"><h1>Iniciar sesión</h1></div>
   <label htmlFor="usuario">Usuario</label>
   <input id="usuario" name="username" autoComplete="username" required maxLength={120} value={username} onChange={e=>{setUsername(e.target.value);if(error)setError('')}}/>

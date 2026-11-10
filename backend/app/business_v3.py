@@ -1,7 +1,7 @@
 """V3: calendario interno, configuracion de IA, gestiones y datos simulados.
 No conecta sistemas externos y evita modificar historiales reales al sembrar la demo.
 """
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import json
 import re
 from pathlib import Path
@@ -95,8 +95,13 @@ class AISettings(BaseModel):
 
 
 class CaseStatus(BaseModel):
-    estado: Literal['sin_atender','en_gestion','concretada','no_concretada','resuelta']
+    # 'en_gestion' se acepta por compatibilidad y se guarda como 'calificada'.
+    estado: Literal['sin_atender','calificada','cotizada','muestra_piloto','concretada','no_concretada','resuelta','en_gestion']
     motivo: str=Field(default='',max_length=400)
+    cotizacion_monto: float|None=Field(default=None,gt=0)
+    cotizacion_moneda: Literal['ARS','USD']|None=None
+    cotizacion_fecha: date|None=None
+    cotizacion_validez_dias: int|None=Field(default=None,ge=1,le=365)
 
 
 class ChecklistData(BaseModel):
@@ -129,6 +134,26 @@ DEMO_CONTACTS = [
  ('Prisma Beauty','Rocío Gómez','Loción corporal','packaging'),
  ('Marea Sur','Eugenia Peralta','Productos capilares','mayorista'),
  ('Nativa Laboratorios','Mariano Ruiz','Jabón líquido','producción'),
+ # V4: casos realistas del rubro (índices 20 a 24).
+ ('Farmacias del Plata','Lorena Sosa','Línea Dermogreen','compra mayorista'),
+ ('Brote Skincare','Tomás Herrera','Sérum facial de 30 ml','fabricación para terceros'),
+ ('Distribuidora Guaraní','Ramón Benítez','Fragancias Acqua Di Fiore','exportación'),
+ ('Micaela Romero','Micaela Romero','Búsqueda laboral','no comercial'),
+ ('Envases Litoral','Diego Ferreyra','Envases PET y frascos de vidrio','no comercial'),
+]
+
+# V4: consultas realistas para probar clasificación, lote mínimo, exportación y no comerciales.
+DEMO_V4 = [
+ ('v4-01',20,'Correo','Buenas tardes. Somos una cadena de 35 farmacias en el AMBA y queremos incorporar la línea Dermogreen. '
+  '¿Nos pueden enviar lista de precios mayorista, condiciones de pago y pedido mínimo?','Línea Dermogreen para cadena de farmacias'),
+ ('v4-02',21,'WhatsApp','Hola! Estamos lanzando una marca de skincare y queremos fabricar 2.000 unidades de sérum facial de 30 ml '
+  'con nuestra propia fórmula. ¿Pueden producirlo y en qué plazo?',''),
+ ('v4-03',22,'Correo','Buen día. Somos distribuidores de perfumería en Asunción, Paraguay, y nos interesa importar las fragancias '
+  'Acqua Di Fiore. ¿Exportan a Paraguay? ¿Con qué condiciones y documentación trabajan?','Exportación de fragancias a Paraguay'),
+ ('v4-04',23,'Formulario web','Hola, soy técnica química y me gustaría trabajar en el laboratorio. Les dejo mi CV para '
+  'búsquedas en control de calidad. Quedo a disposición.','Formulario web · Contacto'),
+ ('v4-05',24,'Correo','Estimados: somos fabricantes de envases PET y frascos de vidrio para cosmética. Queremos presentarles '
+  'nuestro catálogo y coordinar una visita comercial con el área de compras.','Presentación de catálogo de envases'),
 ]
 
 
@@ -142,10 +167,13 @@ def seed_demo_v3(con, include_web=True):
     templates=[
         'Hola, queremos averiguar por {producto}. Necesitaríamos orientación para una posible cotización.',
         'Buen día. Tenemos interés en {producto}. Queremos definir cantidad y presentación.',
-        'ola qeria consultar por {producto}, cuanto tda y q datos nesesitan?',
+        'Hola, ¿cómo están? Quería consultar por {producto}. ¿Qué datos necesitan para cotizar?',
         'Les compartimos más información sobre {producto}. El envase sería personalizado.',
-        'Nos pueden indicar qué datos necesitan para evaluar {producto}?'
+        '¿Nos pueden indicar qué datos necesitan para evaluar {producto}?'
     ]
+    # Solo dos mensajes informales con errores de tipeo, para probar la robustez de la IA.
+    informal={2:'ola qeria consultar por {producto}, cuanto tda y q datos nesesitan?',
+              17:'hola buenas, q precio tiene {producto}? necesitamos unas 3000 aprox'}
     fixtures=[]
     for i in range(30):
         # Primeros diez contactos reciben dos mensajes, uno por cada canal.
@@ -157,7 +185,7 @@ def seed_demo_v3(con, include_web=True):
         client,person,product,_=DEMO_CONTACTS[idx]
         email=f'contacto{idx+1}@ejemplo.test'  # dominio reservado para ejemplos
         phone=f'549110000{idx+1:04d}'
-        text=templates[i%len(templates)].format(producto=product)
+        text=(informal.get(i) or templates[i%len(templates)]).format(producto=product)
         subject=f'Consulta sobre {product}' if channel=='Correo' else ''
         fixtures.append((f'v3-{i+1:02d}',client,person,channel,text,email if channel=='Correo' else '',phone if channel=='WhatsApp' else '',subject,i,idx))
     if include_web:
@@ -166,13 +194,19 @@ def seed_demo_v3(con, include_web=True):
             client,person,product,_=DEMO_CONTACTS[idx]
             text=f'Solicitud desde el formulario de Pasmanter. Producto: {product}. Cantidad estimada: {2000+j*1000} unidades. Localidad: CABA. Solicitamos información comercial.'
             fixtures.append((f'v3-web-{j+1:02d}',client,person,'Formulario web',text,f'contacto{idx+1}@ejemplo.test',f'549110000{idx+1:04d}',f'Formulario web · {product}',30+j,idx))
+    if include_web:
+        for key,idx,channel,body,subject in DEMO_V4:
+            fixtures.append((key,DEMO_CONTACTS[idx][0],DEMO_CONTACTS[idx][1],channel,body,
+                             f'contacto{idx+1}@ejemplo.test' if channel!='WhatsApp' else '',
+                             f'549110000{idx+1:04d}' if channel!='Correo' else '',
+                             subject,35+int(key[-2:]),idx))
     demo_contacts={}
     for key,client,person,channel,body,email,phone,subject,offset,idx in fixtures:
         if con.execute('SELECT 1 FROM fixtures_v3 WHERE clave=?',(key,)).fetchone():continue
         # Una gestion inicial por contacto en esta tanda demo; los mensajes adicionales
         # se asocian al mismo numero sin crear otro expediente.
         existing=con.execute('''SELECT b.ficha_id FROM bandeja_consultas b JOIN fixtures_v3 fx ON fx.mensaje_id=b.id
-                      WHERE fx.clave LIKE 'v3-%' AND b.cliente=? AND b.ficha_id IS NOT NULL LIMIT 1''',(client,)).fetchone()
+                      WHERE (fx.clave LIKE 'v3-%' OR fx.clave LIKE 'v4-%') AND b.cliente=? AND b.ficha_id IS NOT NULL LIMIT 1''',(client,)).fetchone()
         received=(base-timedelta(hours=offset+1)).isoformat(timespec='seconds')
         if existing:
             ficha_id=existing['ficha_id']
@@ -195,6 +229,8 @@ def seed_demo_v3(con, include_web=True):
                  email_remitente,telefono_remitente,asunto,ficha_id,oportunidad_id) VALUES(?,?,?,?,?,'nueva',?,?,?,?,?)''',
                  (client,person,channel,body,received,email,phone,subject,ficha_id,contact_id))
         con.execute('INSERT INTO fixtures_v3(clave,mensaje_id) VALUES(?,?)',(key,cur.lastrowid))
+        from .business_v4 import apply_form_fields
+        apply_form_fields(con,cur.lastrowid)
         demo+=1
     return demo
 
@@ -274,15 +310,31 @@ def register_business_v3(app:FastAPI,db_path:Path):
 
     @app.post('/api/fichas/{ficha_id}/estado')
     def set_case_status(ficha_id:int,request:Request,payload:CaseStatus):
+        from .business_v4 import ESTADO_LEGACY,MOTIVOS_NO_CONCRETADA
         user=current(request,db_path)
         if user and user['role']=='gerencia':raise HTTPException(403,'Gerencia solo consulta')
+        estado=ESTADO_LEGACY.get(payload.estado,payload.estado)
+        motivo=payload.motivo.strip()
         with connect(db_path) as con:
             row=con.execute('SELECT * FROM fichas_consulta WHERE id=?',(ficha_id,)).fetchone()
             if not row:raise HTTPException(404,'Consulta no encontrada')
-            closed=payload.estado in ('concretada','no_concretada','resuelta')
-            con.execute('UPDATE fichas_consulta SET estado_gestion=?,cerrada_en=?,motivo_cierre=?,actualizada_en=? WHERE id=?',
-                (payload.estado,stamp() if closed else None,payload.motivo,stamp(),ficha_id))
-            return {'id':ficha_id,'estado':payload.estado,'codigo':row['codigo']}
+            if row['estado_gestion']=='fusionada':raise HTTPException(409,'La gestión fue fusionada en otra')
+            if estado=='no_concretada' and motivo not in MOTIVOS_NO_CONCRETADA:
+                raise HTTPException(422,'Indicá el motivo: '+', '.join(MOTIVOS_NO_CONCRETADA))
+            quote={}
+            if estado=='cotizada':
+                monto=payload.cotizacion_monto if payload.cotizacion_monto is not None else row['cotizacion_monto']
+                moneda=payload.cotizacion_moneda or row['cotizacion_moneda']
+                if monto is None or not moneda:
+                    raise HTTPException(422,'Para pasar a Cotizada indicá monto y moneda de la cotización')
+                quote={'cotizacion_monto':monto,'cotizacion_moneda':moneda,
+                       'cotizacion_fecha':(payload.cotizacion_fecha.isoformat() if payload.cotizacion_fecha else row['cotizacion_fecha'] or date.today().isoformat()),
+                       'cotizacion_validez_dias':payload.cotizacion_validez_dias if payload.cotizacion_validez_dias is not None else row['cotizacion_validez_dias']}
+            closed=estado in ('concretada','no_concretada','resuelta')
+            values={'estado_gestion':estado,'cerrada_en':stamp() if closed else None,
+                    'motivo_cierre':motivo if closed else '','actualizada_en':stamp(),**quote}
+            con.execute(f"UPDATE fichas_consulta SET {', '.join(k+'=?' for k in values)} WHERE id=?",(*values.values(),ficha_id))
+            return {'id':ficha_id,'estado':estado,'codigo':row['codigo']}
 
     @app.get('/api/fichas/{ficha_id}/checklists')
     def get_checklists(ficha_id:int,request:Request):
@@ -351,10 +403,35 @@ def register_business_v3(app:FastAPI,db_path:Path):
                 t=groups.setdefault(k,{'key':'contact-'+str(k),'cliente':m['cliente'],'contacto':m['contacto'],'mensajes':[]})
                 t['mensajes'].append(m)
             out=list(groups.values())
+            from .business_v4 import ESTADOS_ABIERTOS,es_bajo_minimo,lote_minimo,parse_dt
+            from .metrics import response_status
+            minimo=lote_minimo(con)
+            cases={r['id']:dict(r) for r in con.execute('SELECT * FROM fichas_consulta')}
             for t in out:
                 t['mensajes'].sort(key=lambda m:(m['recibido_el'],m['id']))
                 t['ultimo']=t['mensajes'][-1]['recibido_el']
-                t['no_leidos']=sum(1 for m in t['mensajes'] if not m['leido_en'])
+                incoming=[m for m in t['mensajes'] if m.get('direccion','entrante')!='saliente']
+                t['no_leidos']=sum(1 for m in incoming if not m['leido_en'])
+                # Gestión activa del hilo: la abierta con el mensaje más reciente; si no hay, la última.
+                ids=[]
+                for m in reversed(t['mensajes']):
+                    if m['ficha_id'] and m['ficha_id'] not in ids:ids.append(m['ficha_id'])
+                open_ids=[i for i in ids if cases.get(i,{}).get('estado_gestion') in ESTADOS_ABIERTOS]
+                active=cases.get((open_ids or ids or [None])[0])
+                t['cerrada']=not open_ids
+                t['mensaje_tras_cierre']=False
+                t['gestion']=None
+                t['respuesta']={'pendiente':False,'horas':0,'desde':None}
+                if active:
+                    t['gestion']={k:active[k] for k in ('id','codigo','titulo','estado_gestion','tipo_consulta','tipo_sugerido_ia',
+                                  'cantidad','producto','responsable','cerrada_en','cotizacion_monto','cotizacion_moneda')}
+                    t['gestion']['bajo_minimo']=es_bajo_minimo(active['tipo_consulta'],active['cantidad'],minimo)
+                    msgs=[m for m in t['mensajes'] if m['ficha_id']==active['id']]
+                    t['respuesta']=response_status([m for m in msgs if m.get('direccion','entrante')!='saliente'],
+                                                   [m for m in msgs if m.get('direccion')=='saliente'],active['estado_gestion'])
+                    closed_at=parse_dt(active['cerrada_en'])
+                    if t['cerrada'] and closed_at and active['estado_gestion']!='fusionada':
+                        t['mensaje_tras_cierre']=any((parse_dt(m['recibido_el']) or closed_at)>closed_at for m in incoming)
             return sorted(out,key=lambda x:x['ultimo'],reverse=True)
 
     @app.post('/api/inbox/{message_id}/new-case')
@@ -379,4 +456,4 @@ def register_business_v3(app:FastAPI,db_path:Path):
             con.execute('BEGIN IMMEDIATE')
             added=seed_demo_v3(con,include_web=payload.incluir_web)
             total=con.execute('SELECT COUNT(*) FROM fixtures_v3').fetchone()[0]
-        return {'added':added,'demo_messages':total,'whatsapp':15,'email':15,'web':5 if payload.incluir_web else 0}
+        return {'added':added,'demo_messages':total,'whatsapp':15,'email':15,'web':5 if payload.incluir_web else 0,'casos_rubro':5 if payload.incluir_web else 0}

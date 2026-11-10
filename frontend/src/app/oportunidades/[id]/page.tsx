@@ -2,14 +2,13 @@
 import Link from 'next/link';
 import {useParams} from 'next/navigation';
 import {useCallback,useEffect,useState} from 'react';
-import {ArrowLeft,CalendarDays,ChevronDown,ContactRound,History,MessageCircle,Plus,Check} from 'lucide-react';
+import {ArrowLeft,CalendarDays,ChevronDown,ContactRound,History,MessageCircle} from 'lucide-react';
 import Shell from '@/components/shell';
 import CaseDialog from '@/components/case-dialog';
-import {api,Detalle,Estado,dateAR,estadoNombre,FichaConsulta,UsuarioSesion} from '@/lib/api';
+import {api,Detalle,dateAR,FichaConsulta,UsuarioSesion,estadoGestionNombre,esCerrada,ESTADOS_ABIERTOS,cotizacionTexto} from '@/lib/api';
 
 export default function DetailPage(){
  const params=useParams<{id:string}>(); const id=Number(params.id);
- const [selectedEstado,setSelectedEstado]=useState<Estado>('nueva'),[estadoSaving,setEstadoSaving]=useState(false),[estadoError,setEstadoError]=useState(''),[estadoSuccess,setEstadoSuccess]=useState('');
  const [followDate,setFollowDate]=useState(''),[followReason,setFollowReason]=useState(''),[scheduleSaving,setScheduleSaving]=useState(false),[scheduleMessage,setScheduleMessage]=useState('');
  const [fichas,setFichas]=useState<FichaConsulta[]>([]),[openedFicha,setOpenedFicha]=useState<number|null>(null),[user,setUser]=useState<UsuarioSesion|null>(null);
  const [profile,setProfile]=useState({cliente:'',contacto:'',producto:'',email:'',telefono:'',notas:''}),[profileSaving,setProfileSaving]=useState(false);
@@ -17,18 +16,13 @@ export default function DetailPage(){
  const [contactOpen,setContactOpen]=useState(false),[historyOpen,setHistoryOpen]=useState(false);
  const load=useCallback(async()=>{
   setLoading(true);setError('');
-  try{const item=await api<Detalle>(`/api/opportunities/${id}`);setData(item);setProfile({cliente:item.cliente,contacto:item.contacto,producto:item.producto,email:item.email||'',telefono:item.telefono||'',notas:item.notas});setSelectedEstado(item.estado);setFollowDate(item.fecha_seguimiento||'');setFollowReason(item.motivo_seguimiento)}
+  try{const item=await api<Detalle>(`/api/opportunities/${id}`);setData(item);setProfile({cliente:item.cliente,contacto:item.contacto,producto:item.producto,email:item.email||'',telefono:item.telefono||'',notas:item.notas});setFollowDate(item.fecha_seguimiento||'');setFollowReason(item.motivo_seguimiento)}
   catch(e){setError(e instanceof Error?e.message:'Error inesperado')}
   finally{setLoading(false)}
  },[id]);
  const loadCases=useCallback(async()=>{try{setFichas(await api<FichaConsulta[]>(`/api/opportunities/${id}/fichas`))}catch{/* La ficha sigue disponible aunque falle el listado */}},[id]);
  useEffect(()=>{if(Number.isInteger(id)&&id>0){void load();void loadCases()}else{setError('Identificador no válido');setLoading(false)}},[id,load,loadCases]);
  useEffect(()=>{void fetch('/api/session/me').then(r=>r.ok?r.json():null).then(setUser).catch(()=>{})},[]);
- async function saveStatus(next:Estado){if(!data||next===data.estado)return;setEstadoError('');setEstadoSuccess('');setEstadoSaving(true);
-  try{const updated=await api<Detalle>(`/api/opportunities/${id}/status`,{method:'POST',body:JSON.stringify({estado:next})});setData(updated);setSelectedEstado(updated.estado);setEstadoSuccess('Guardado')}
-  catch(e){setSelectedEstado(data.estado);setEstadoError(e instanceof Error?e.message:'No se pudo actualizar el estado')}
-  finally{setEstadoSaving(false)}
- }
  async function scheduleFollowUp(e?:React.FormEvent,remove=false){e?.preventDefault();setScheduleSaving(true);setScheduleMessage('');try{
   const updated=await api<Detalle>(`/api/opportunities/${id}/follow-up`,{method:'POST',body:JSON.stringify({fecha_seguimiento:remove?null:followDate||null,motivo_seguimiento:remove?'':followReason})});
   setData(updated);setFollowDate(updated.fecha_seguimiento||'');setFollowReason(updated.motivo_seguimiento);setScheduleMessage(remove?'Seguimiento eliminado':'Seguimiento guardado')
@@ -36,20 +30,22 @@ export default function DetailPage(){
  async function saveProfile(e:React.FormEvent){e.preventDefault();setProfileSaving(true);setError('');try{await api(`/api/opportunities/${id}/profile`,{method:'POST',body:JSON.stringify(profile)});await load()}
  catch(e){setError(e instanceof Error?e.message:'No se pudo actualizar la ficha')}finally{setProfileSaving(false)}}
  const readonly=user?.role==='gerencia';
- const activeCases=fichas.filter(f=>!['concretada','no_concretada','resuelta'].includes(f.estado_gestion||''));
+ const activeCases=fichas.filter(f=>!esCerrada(f.estado_gestion));
+ // El estado comercial vive en cada gestión; acá se muestra el de la gestión abierta más avanzada.
+ const leadState=activeCases.map(f=>f.estado_gestion||'sin_atender').sort((a,b)=>ESTADOS_ABIERTOS.indexOf(b as never)-ESTADOS_ABIERTOS.indexOf(a as never))[0]||fichas[0]?.estado_gestion||'';
  const completedCases=fichas.length-activeCases.length;
  return <Shell>
   <div className="v4-contact-page">
-   <Link href={data&&['ganada','perdida'].includes(data.estado)?'/finalizados':'/'} className="v4-back-link"><ArrowLeft size={16}/> Volver a fichas</Link>
+   <Link href={fichas.length&&!activeCases.length?'/finalizados':'/'} className="v4-back-link"><ArrowLeft size={16}/> Volver a fichas</Link>
    {loading&&<div className="panel empty">Cargando ficha...</div>}{error&&<p className="alert error" role="alert">{error}</p>}
    {data&&<>
     <header className="v4-contact-header">
      <div className="v4-contact-intro"><span className="v4-contact-avatar" aria-hidden="true">{data.cliente.charAt(0).toUpperCase()}</span><div><h1>{data.cliente}</h1><p>{[data.contacto,data.email||data.telefono].filter(Boolean).join(' · ')}</p></div></div>
-     <div className="v4-contact-status"><label htmlFor="estado-contacto">Estado comercial</label>{readonly?<span className={`status status-${data.estado}`}>{estadoNombre[data.estado]}</span>:<select id="estado-contacto" value={selectedEstado} onChange={e=>{const next=e.target.value as Estado;setSelectedEstado(next);void saveStatus(next)}} disabled={estadoSaving} aria-busy={estadoSaving}>{(Object.keys(estadoNombre) as Estado[]).map(st=><option key={st} value={st}>{estadoNombre[st]}</option>)}</select>}{estadoSaving&&<small role="status">Guardando…</small>}{estadoSuccess&&!estadoSaving&&<small role="status"><Check size={12}/> {estadoSuccess}</small>}{estadoError&&<small role="alert" className="v3-form-error">{estadoError}</small>}</div>
+     <div className="v4-contact-status"><label>Estado comercial</label>{leadState?<span className={`v4-case-status is-${leadState}`}>{estadoGestionNombre[leadState]}</span>:<span className="muted">Sin gestión</span>}<small>Se actualiza desde cada gestión</small></div>
     </header>
     <section className="v4-contact-section v4-contact-cases" aria-label="Gestiones comerciales">
      <div className="v4-contact-section-title"><div><h2>Gestiones comerciales</h2><small>{activeCases.length} activa{activeCases.length===1?'':'s'}{completedCases>0?` · ${completedCases} finalizada${completedCases===1?'':'s'}`:''}</small></div></div>
-     {fichas.length>0?<div className="v4-contact-case-list">{fichas.map(f=><button key={f.id} type="button" className="v4-contact-case" onClick={()=>setOpenedFicha(f.id)}><span className="v4-contact-case-icon"><MessageCircle size={17}/></span><span className="v4-contact-case-copy"><strong>{f.titulo||f.producto||'Gestión comercial'}</strong><small>{f.codigo}{f.mensajes_count!=null?` · ${f.mensajes_count} mensaje${f.mensajes_count===1?'':'s'}`:''}</small></span><span className={`v4-case-status is-${f.estado_gestion||'sin_atender'}`}>{({sin_atender:'Sin atender',en_gestion:'En gestión',concretada:'Concretada',no_concretada:'No concretada',resuelta:'Resuelta'} as Record<string,string>)[f.estado_gestion||'sin_atender']||'En gestión'}</span><ChevronDown size={16} className="v4-case-chevron"/></button>)}</div>:<p className="v4-contact-empty">Todavía no hay gestiones asociadas.</p>}
+     {fichas.length>0?<div className="v4-contact-case-list">{fichas.map(f=><button key={f.id} type="button" className="v4-contact-case" onClick={()=>setOpenedFicha(f.id)}><span className="v4-contact-case-icon"><MessageCircle size={17}/></span><span className="v4-contact-case-copy"><strong>{f.titulo||f.producto||'Gestión comercial'}</strong><small>{f.codigo}{f.mensajes_count!=null?` · ${f.mensajes_count} mensaje${f.mensajes_count===1?'':'s'}`:''}</small></span>{f.cotizacion_monto!=null&&<small className="v5-chip is-money">{cotizacionTexto(f.cotizacion_monto,f.cotizacion_moneda)}</small>}<span className={`v4-case-status is-${f.estado_gestion||'sin_atender'}`}>{estadoGestionNombre[f.estado_gestion||'sin_atender']}</span><ChevronDown size={16} className="v4-case-chevron"/></button>)}</div>:<p className="v4-contact-empty">Todavía no hay gestiones asociadas.</p>}
     </section>
     <div className="v4-contact-secondary">
      <section className="v4-light-disclosure"><button type="button" className="v4-light-summary" aria-expanded={contactOpen} onClick={()=>setContactOpen(v=>!v)}><ContactRound size={17}/><span>Datos del contacto</span><ChevronDown size={17} className={contactOpen?'is-open':''}/></button>

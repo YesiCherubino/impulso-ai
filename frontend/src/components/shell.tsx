@@ -4,6 +4,7 @@ import {usePathname,useRouter} from 'next/navigation';
 import {useEffect,useState} from 'react';
 import {Inbox, ContactRound, CalendarDays, FileCheck2, FileText, Link2, Settings, LogOut, BookOpen, Menu, X} from 'lucide-react';
 import Notifications from '@/components/notifications';
+import ImpulsoMark from '@/components/impulso-mark';
 import ThemeToggle from '@/components/theme-toggle';
 import {api, UsuarioSesion, roleName} from '@/lib/api';
 
@@ -34,7 +35,7 @@ export default function Shell({children}:{children:React.ReactNode}){
  const title=pathname.startsWith('/oportunidades/')?'Ficha de contacto':pathname.startsWith('/administracion')?'Administración':nav.find(n=>n.href===pathname)?.label??'Impulso';
  return <div className="app-shell office-app v2-office">
   <aside className={`sidebar ${menuOpen?'sidebar-open':''}`}>
-   <div className="office-brand-row"><Link href="/consultas" className="brand v2-brand" onClick={()=>setMenuOpen(false)}><span className="impulso-mark" aria-hidden="true"><svg viewBox="0 0 34 34" width="34" height="34" fill="none"><path d="M7 24L21 9M16 27L30 12" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"/></svg></span><span><strong>Impulso</strong><small>Gestión comercial</small></span></Link><button className="office-close-menu" onClick={()=>setMenuOpen(false)} aria-label="Cerrar menú"><X size={19}/></button></div>
+   <div className="office-brand-row"><Link href="/consultas" className="brand v2-brand" onClick={()=>setMenuOpen(false)}><span className="impulso-mark" aria-hidden="true"><ImpulsoMark/></span><span><strong>Impulso</strong><small>Gestión comercial</small></span></Link><button className="office-close-menu" onClick={()=>setMenuOpen(false)} aria-label="Cerrar menú"><X size={19}/></button></div>
    <div className="side-group-label">GESTIÓN COMERCIAL</div>
    <nav className="side-nav" aria-label="Navegación principal">{[...nav,...(user?.role==='administrador'?[{href:'/administracion',label:'Administración',icon:Settings}]:[])].map(item=>{const Icon=item.icon;const active=pathname===item.href;return <Link key={item.href} href={item.href} className={active?'active':''} aria-current={active?'page':undefined} onClick={()=>setMenuOpen(false)}><Icon size={18} strokeWidth={1.6}/><span>{item.label}</span></Link>})}</nav>
    <div className="office-sidebar-footer v2-sidebar-footer">

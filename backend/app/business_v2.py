@@ -43,9 +43,13 @@ def current(request: Request, db_path: Path, *roles: str):
     return user
 
 
-def row_ficha(row):
-    return {**dict(row), 'requisitos': json.loads(row['requisitos_json'] or '[]'),
+def row_ficha(row, minimo=None):
+    from .business_v4 import ficha_extras, LOTE_MINIMO_DEFAULT
+    data = {**dict(row), 'requisitos': json.loads(row['requisitos_json'] or '[]'),
             'datos_faltantes': json.loads(row['datos_faltantes_json'] or '[]')}
+    if 'campos_editados_json' in data:
+        data.update(ficha_extras(row, minimo or LOTE_MINIMO_DEFAULT))
+    return data
 
 
 def create_ficha(con, *, cliente, contacto, titulo, incoming_stamp, opportunity_id=None):
@@ -70,7 +74,7 @@ def find_sender_ficha(con, email: str, phone: str):
     pinned={int(r['ficha_id']) for r in mapping}
     if len(pinned)==1:
         pinned_id=next(iter(pinned))
-        active=con.execute("SELECT 1 FROM fichas_consulta WHERE id=? AND estado_gestion NOT IN ('concretada','no_concretada','resuelta')",(pinned_id,)).fetchone()
+        active=con.execute("SELECT 1 FROM fichas_consulta WHERE id=? AND estado_gestion NOT IN ('concretada','no_concretada','resuelta','fusionada')",(pinned_id,)).fetchone()
         if active:return pinned_id
     if len(pinned)>1:return None
     rows = con.execute('''SELECT DISTINCT c.ficha_id FROM bandeja_consultas c
@@ -87,85 +91,15 @@ def find_sender_ficha(con, email: str, phone: str):
     if len(matches)==1:
         choice=next(iter(matches))
         closed=con.execute("SELECT estado_gestion FROM fichas_consulta WHERE id=?",(choice,)).fetchone()
-        return choice if closed and closed['estado_gestion'] not in ('concretada','no_concretada','resuelta') else None
-    active=[id_ for id_ in matches if con.execute("SELECT 1 FROM fichas_consulta WHERE id=? AND estado_gestion NOT IN ('concretada','no_concretada','resuelta')",(id_,)).fetchone()]
+        return choice if closed and closed['estado_gestion'] not in ('concretada','no_concretada','resuelta','fusionada') else None
+    active=[id_ for id_ in matches if con.execute("SELECT 1 FROM fichas_consulta WHERE id=? AND estado_gestion NOT IN ('concretada','no_concretada','resuelta','fusionada')",(id_,)).fetchone()]
     return active[0] if len(active)==1 else None
 
 
 def report_data(con, *, period='mes', canal='todos', responsable='', user=None):
-    today = date.today()
-    since = today.replace(day=1) if period == 'mes' else today - timedelta(days=6) if period == 'semana' else today - timedelta(days=89) if period == 'trimestre' else date(1900, 1, 1)
-    since_iso = since.isoformat()
-    role = user['role'] if user else 'administrador'
-    responsible = responsable.strip()
-    # Ventas solo ve indicadores de contactos a su cargo; sin dueño no se infiere.
-    if role == 'ventas':
-        responsible = user['username']
-    query = '''SELECT * FROM oportunidades WHERE creada_el >= ?'''
-    params = [since_iso]
-    if canal != 'todos':
-        query += ' AND LOWER(canal_origen)=?'
-        params.append(canal.casefold())
-    if responsible:
-        query += ' AND LOWER(responsable)=?'
-        params.append(responsible.casefold())
-    opps = [dict(r) for r in con.execute(query, params).fetchall()]
-    msg_query = '''SELECT b.* FROM bandeja_consultas b WHERE substr(b.recibido_el,1,10) >= ?'''
-    msg_params = [since_iso]
-    if canal != 'todos':
-        msg_query += ' AND LOWER(b.canal)=?'
-        msg_params.append(canal.casefold())
-    if role == 'ventas' or responsible:
-        msg_query += ''' AND EXISTS(SELECT 1 FROM fichas_consulta f JOIN oportunidades o ON f.oportunidad_id=o.id
-                         WHERE f.id=b.ficha_id AND LOWER(o.responsable)=?)'''
-        msg_params.append(responsible.casefold())
-    messages = [dict(r) for r in con.execute(msg_query,msg_params).fetchall()]
-    # Para indicar operaciones cerradas durante el período se usa fecha_cierre, si existe.
-    closed = [dict(r) for r in con.execute('''SELECT * FROM oportunidades WHERE COALESCE(fecha_cierre, ultimo_contacto)>=?''',(since_iso,)).fetchall()]
-    if canal != 'todos':
-        closed=[r for r in closed if (r['canal_origen'] or '').casefold()==canal.casefold()]
-    if responsible:
-        closed = [r for r in closed if (r['responsable'] or '').casefold() == responsible.casefold()]
-    # El cierre se mide por gestión numerada. Operaciones históricas sin gestión
-    # vinculada quedan incluidas una vez para preservar la continuidad del reporte.
-    linked_legacy={r['oportunidad_id'] for r in con.execute('SELECT oportunidad_id FROM fichas_consulta WHERE oportunidad_id IS NOT NULL')}
-    cases_closed=[dict(r) for r in con.execute('''SELECT f.*,o.responsable,COALESCE(o.canal_origen,'') AS canal_origen
-                     FROM fichas_consulta f LEFT JOIN oportunidades o ON o.id=f.oportunidad_id
-                     WHERE f.estado_gestion IN ('concretada','no_concretada') AND substr(COALESCE(f.cerrada_en,f.actualizada_en),1,10)>=?''',(since_iso,))]
-    if canal != 'todos':
-        cases_closed=[r for r in cases_closed if con.execute('SELECT 1 FROM bandeja_consultas WHERE ficha_id=? AND LOWER(canal)=? LIMIT 1',
-                      (r['id'],canal.casefold())).fetchone() or (r['canal_origen'] or '').casefold()==canal.casefold()]
-    if responsible:cases_closed=[r for r in cases_closed if (r['responsable'] or '').casefold()==responsible.casefold()]
-    legacy_closed=[r for r in closed if r['id'] not in linked_legacy]
-    contacts_active = len([r for r in opps if r['estado'] not in ('ganada','perdida')])
-    channel_counts = {key:sum(1 for m in messages if m['canal'].casefold().startswith(key.casefold())) for key in ('WhatsApp','Correo','Formulario web')}
-    product_counts = {}
-    for r in opps:
-        name = (r['producto'] or '').strip() or 'No especificado'
-        product_counts[name] = product_counts.get(name,0)+1
-    overdue = 0
-    for r in opps:
-        if r['estado'] in ('ganada','perdida'):
-            continue
-        due = r['fecha_seguimiento']
-        if (due and due <= today.isoformat()) or (not due and r['ultimo_contacto'] <= (today-timedelta(days=7)).isoformat()):
-            overdue += 1
-    return {
-        'periodo': period, 'desde': since_iso, 'hasta': today.isoformat(), 'canal': canal,
-        'responsable': responsible or 'Todos',
-        'indicadores': {
-            'consultas_recibidas': len(messages), 'no_leidas':sum(1 for m in messages if not m['leido_en']),
-            'sin_atender':sum(1 for m in messages if m['leido_en'] and m['estado']=='nueva'),
-            'en_gestion':sum(1 for m in messages if m['estado']=='en_gestion'),
-            'contactos_activos':contacts_active,
-            'concretadas':sum(1 for x in cases_closed if x['estado_gestion']=='concretada')+sum(1 for x in legacy_closed if x['estado']=='ganada'),
-            'no_concretadas':sum(1 for x in cases_closed if x['estado_gestion']=='no_concretada')+sum(1 for x in legacy_closed if x['estado']=='perdida'),
-            'seguimientos_vencidos':overdue,
-        },
-        'canales':channel_counts,
-        'productos_consultados': sorted(product_counts.items(),key=lambda x:-x[1])[:12],
-        'origen_datos':'Registros actuales de Impulso. Para cierres históricos sin fecha de cierre, se usa la fecha del último contacto. Los mensajes externos no se reciben automáticamente.'
-    }
+    """Delegado a metrics.report_data: una sola fuente para todos los indicadores."""
+    from .metrics import report_data as unified
+    return unified(con, period=period, canal=canal, responsable=responsable, user=user)
 
 
 class NewMessage(BaseModel):
@@ -178,18 +112,33 @@ class NewMessage(BaseModel):
     asunto: str = Field(default='',max_length=250)
 
 
+TipoConsultaFicha = Literal['sin_clasificar','fabricacion_terceros','desarrollo_formula','elaboracion_envasado',
+                           'mayorista','exportacion','no_comercial','otro']
+SiNoFicha = Literal['si','no','sin_especificar']
+
+
 class FichaEdit(BaseModel):
     titulo: str = Field(max_length=200)
     cliente: str = Field(min_length=2,max_length=120)
     contacto: str = Field(max_length=120)
     producto: str = Field(max_length=150)
     cantidad: int|None = Field(default=None,ge=1)
-    tipo_consulta: Literal['sin_clasificar','fabricacion_terceros','desarrollo_formula','elaboracion_envasado','mayorista','otro'] = 'sin_clasificar'
+    tipo_consulta: TipoConsultaFicha = 'sin_clasificar'
     presentacion: str = Field(default='',max_length=120)
     packaging: str = Field(default='',max_length=200)
     requisitos: list[str] = Field(default_factory=list,max_length=40)
     datos_faltantes: list[str] = Field(default_factory=list,max_length=40)
     resumen: str = Field(default='',max_length=2000)
+    # V4: calificación. Si no se envían, se conservan los valores guardados.
+    formula: Literal['propia','desarrollo_pasmanter','sin_especificar']|None = None
+    marca_registrada: SiNoFicha|None = None
+    registro_anmat: Literal['si','no','en_tramite','sin_especificar']|None = None
+    destino: Literal['','local','exportacion']|None = None
+    pais_destino: str|None = Field(default=None,max_length=80)
+    plazo_deseado: str|None = Field(default=None,max_length=120)
+    localidad: str|None = Field(default=None,max_length=120)
+    origen: Literal['manual','ia'] = 'manual'
+    confirmar_tipo: bool = False
 
 
 class ContactSave(FichaEdit):
@@ -299,6 +248,8 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
               (cliente,contacto,canal,texto,recibido_el,estado,email_remitente,telefono_remitente,asunto,ficha_id)
               VALUES (?,?,?,?,?,'nueva',?,?,?,?)''',
               (payload.cliente.strip(),payload.contacto.strip(),payload.canal,payload.texto.strip(),received,email,phone,payload.asunto.strip(),ficha))
+            from .business_v4 import apply_form_fields
+            apply_form_fields(con,cur.lastrowid)
             row=con.execute('SELECT * FROM bandeja_consultas WHERE id=?',(cur.lastrowid,)).fetchone()
             return dict(row)
 
@@ -317,34 +268,61 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
     @app.get('/api/fichas')
     def list_fichas(request:Request):
         current(request,db_path)
+        from .business_v4 import lote_minimo
+        from .metrics import load_cases
         with connect(db_path) as con:
-            rows=con.execute('''SELECT f.*,COUNT(b.id) AS mensajes FROM fichas_consulta f LEFT JOIN bandeja_consultas b
-                         ON b.ficha_id=f.id GROUP BY f.id ORDER BY f.actualizada_en DESC,f.id DESC''').fetchall()
-            return [row_ficha(r) for r in rows]
+            # Las gestiones fusionadas no se listan: sus mensajes ya están en la gestión de destino.
+            rows=con.execute('''SELECT f.*,COUNT(b.id) AS mensajes,COUNT(b.id) AS mensajes_count FROM fichas_consulta f LEFT JOIN bandeja_consultas b
+                         ON b.ficha_id=f.id WHERE f.estado_gestion<>'fusionada' GROUP BY f.id ORDER BY f.actualizada_en DESC,f.id DESC''').fetchall()
+            minimo=lote_minimo(con)
+            info={c['id']:c for c in load_cases(con,include_non_commercial=True)}
+            out=[]
+            for r in rows:
+                item=row_ficha(r,minimo)
+                c=info.get(r['id'])
+                if c:item.update({'canal_origen':c['canal_origen'],'respuesta':c['respuesta']})
+                out.append(item)
+            return out
 
     @app.get('/api/fichas/{ficha_id}')
     def get_ficha(ficha_id:int,request:Request):
         current(request,db_path)
+        from .business_v4 import lote_minimo,duplicate_candidates
         with connect(db_path) as con:
             row=con.execute('SELECT * FROM fichas_consulta WHERE id=?',(ficha_id,)).fetchone()
             if not row:raise HTTPException(404,'Ficha no encontrada')
             messages=[dict(r) for r in con.execute('SELECT * FROM bandeja_consultas WHERE ficha_id=? ORDER BY recibido_el,id',(ficha_id,))]
-            return {**row_ficha(row),'mensajes':messages}
+            return {**row_ficha(row,lote_minimo(con)),'mensajes':messages,'duplicados':duplicate_candidates(con,ficha_id)}
 
     @app.post('/api/fichas/{ficha_id}/edit')
     def edit_ficha(ficha_id:int,request:Request,payload:FichaEdit):
         user=current(request,db_path)
         if user and user['role']=='gerencia':raise HTTPException(403,'Gerencia solo consulta')
+        from .business_v4 import lote_minimo
         with connect(db_path) as con:
-            edited=con.execute('''UPDATE fichas_consulta SET titulo=?,cliente=?,contacto=?,producto=?,cantidad=?,
-               tipo_consulta=?,presentacion=?,packaging=?,requisitos_json=?,datos_faltantes_json=?,resumen=?,actualizada_en=?
-               WHERE id=?''',
-               (payload.titulo,payload.cliente,payload.contacto,payload.producto,payload.cantidad,payload.tipo_consulta,
-                payload.presentacion,payload.packaging,json.dumps(payload.requisitos,ensure_ascii=False),
-                json.dumps(payload.datos_faltantes,ensure_ascii=False),payload.resumen,stamp(),ficha_id))
-            if not edited.rowcount:raise HTTPException(404,'Ficha no encontrada')
+            old=con.execute('SELECT * FROM fichas_consulta WHERE id=?',(ficha_id,)).fetchone()
+            if not old:raise HTTPException(404,'Ficha no encontrada')
+            values={'titulo':payload.titulo,'cliente':payload.cliente,'contacto':payload.contacto,'producto':payload.producto,
+                    'cantidad':payload.cantidad,'tipo_consulta':payload.tipo_consulta,'presentacion':payload.presentacion,
+                    'packaging':payload.packaging}
+            extra=payload.model_dump(include={'formula','marca_registrada','registro_anmat','destino','pais_destino',
+                                              'plazo_deseado','localidad'},exclude_none=True)
+            values.update({k:(v.strip() if isinstance(v,str) else v) for k,v in extra.items()})
+            # Los campos cambiados a mano quedan protegidos: la IA no los vuelve a pisar.
+            editados=set(json.loads(old['campos_editados_json'] or '[]'))
+            changed={k for k,v in values.items() if old[k]!=v}
+            if payload.origen=='manual':editados|=changed-{'titulo','cliente','contacto'}
+            tipo_ia=old['tipo_sugerido_ia']
+            if payload.origen=='ia' and 'tipo_consulta' in changed:tipo_ia=1
+            elif payload.origen=='manual' and ('tipo_consulta' in changed or payload.confirmar_tipo):tipo_ia=0
+            sets=', '.join(f'{k}=?' for k in values)
+            con.execute(f'''UPDATE fichas_consulta SET {sets},requisitos_json=?,datos_faltantes_json=?,resumen=?,
+               campos_editados_json=?,tipo_sugerido_ia=?,actualizada_en=? WHERE id=?''',
+               (*values.values(),json.dumps(payload.requisitos,ensure_ascii=False),
+                json.dumps(payload.datos_faltantes,ensure_ascii=False),payload.resumen,
+                json.dumps(sorted(editados)),tipo_ia,stamp(),ficha_id))
             row=con.execute('SELECT * FROM fichas_consulta WHERE id=?',(ficha_id,)).fetchone()
-            return row_ficha(row)
+            return row_ficha(row,lote_minimo(con))
 
     @app.post('/api/inbox/{message_id}/move')
     def move_message(message_id:int,request:Request,payload:MoveMessage):
@@ -417,7 +395,10 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
     def contact_fichas(id_:int,request:Request):
         current(request,db_path)
         with connect(db_path) as con:
-            return [row_ficha(r) for r in con.execute('SELECT * FROM fichas_consulta WHERE oportunidad_id=? ORDER BY creada_en DESC',(id_,))]
+            from .business_v4 import lote_minimo
+            minimo=lote_minimo(con)
+            return [row_ficha(r,minimo) for r in con.execute('''SELECT f.*,(SELECT COUNT(*) FROM bandeja_consultas b WHERE b.ficha_id=f.id) AS mensajes_count
+                     FROM fichas_consulta f WHERE oportunidad_id=? AND estado_gestion<>'fusionada' ORDER BY creada_en DESC''',(id_,))]
 
     @app.post('/api/opportunities/{id_}/profile')
     def update_contact(id_:int,request:Request,payload:dict):

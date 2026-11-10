@@ -1,8 +1,8 @@
 export type Estado = 'nueva' | 'contactada' | 'cotizada' | 'negociacion' | 'ganada' | 'perdida';
 export type Tipo = 'consulta' | 'correo' | 'llamada' | 'reunion' | 'nota';
-export type TipoConsulta = 'sin_clasificar'|'fabricacion_terceros'|'desarrollo_formula'|'elaboracion_envasado'|'mayorista'|'otro';
+export type TipoConsulta = 'sin_clasificar'|'fabricacion_terceros'|'desarrollo_formula'|'elaboracion_envasado'|'mayorista'|'exportacion'|'no_comercial'|'otro';
 export type CanalOrigen = 'Manual'|'WhatsApp'|'Correo'|'Formulario web'|'Teléfono'|'Otro';
-export const tipoConsultaNombre:Record<TipoConsulta,string>={sin_clasificar:'Sin clasificar',fabricacion_terceros:'Fabricación para terceros',desarrollo_formula:'Desarrollo de fórmula',elaboracion_envasado:'Elaboración y envasado',mayorista:'Compra mayorista',otro:'Otra consulta'};
+export const tipoConsultaNombre:Record<TipoConsulta,string>={sin_clasificar:'Sin clasificar',fabricacion_terceros:'Fabricación para terceros',desarrollo_formula:'Desarrollo de fórmula',elaboracion_envasado:'Elaboración y envasado',mayorista:'Compra mayorista (marcas propias)',exportacion:'Exportación',no_comercial:'No comercial',otro:'Otra consulta'};
 export const tiposConsulta=Object.entries(tipoConsultaNombre) as [TipoConsulta,string][];
 export const canalesOrigen:CanalOrigen[]=['Manual','WhatsApp','Correo','Formulario web','Teléfono','Otro'];
 export type Resumen = { oportunidades_activas:number; valor_potencial_usd:number; cotizaciones_pendientes:number; sin_seguimiento:number; acciones_sugeridas:number; fecha_consulta:string };
@@ -32,13 +32,35 @@ export const money=(n:number|null|undefined)=> n==null ? 'Sin estimar' : `USD ${
 export const dateAR=(s:string)=> new Date(`${s}T12:00:00`).toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'numeric'});
 export const estadoNombre:Record<Estado,string>={nueva:'Nueva',contactada:'Contactada',cotizada:'Cotizada',negociacion:'En negociación',ganada:'Concretada',perdida:'No concretada'};
 
-export type ConsultaIA = {cliente:string;contacto:string;producto:string;cantidad:number|null;requisitos:string[];datos_faltantes:string[];resumen:string;respuesta_sugerida:string;tipo_consulta?:TipoConsulta;presentacion?:string;necesita_formula?:'si'|'no'|'sin_especificar';necesita_packaging?:'si'|'no'|'sin_especificar'};
+export type ConsultaIA = {cliente:string;contacto:string;producto:string;cantidad:number|null;requisitos:string[];datos_faltantes:string[];resumen:string;respuesta_sugerida:string;tipo_consulta?:TipoConsulta;presentacion?:string;necesita_formula?:'si'|'no'|'sin_especificar';necesita_packaging?:'si'|'no'|'sin_especificar';datos_a_confirmar?:string[]};
 export type SeguimientoIA = {motivo:string;asunto:string;mensaje:string;consideraciones:string[]};
 
 export type Rol='ventas'|'administrador'|'gerencia';
 export const roleName:Record<Rol,string>={ventas:'Ventas',administrador:'Administrador',gerencia:'Gerencia'};
 export type UsuarioSesion={id:number;username:string;name:string;role:Rol;theme:'claro'|'oscuro'};
-export type ConsultaBandeja = {id:number;cliente:string;contacto:string;canal:string;texto:string;recibido_el:string;estado:'nueva'|'en_gestion'|'resuelta';oportunidad_id:number|null;ficha_id:number|null;leido_en:string|null;email_remitente:string;telefono_remitente:string;asunto:string};
-export type FichaConsulta = {id:number;codigo:string;oportunidad_id:number|null;titulo:string;cliente:string;contacto:string;producto:string;cantidad:number|null;tipo_consulta:TipoConsulta;presentacion:string;packaging:string;requisitos:string[];datos_faltantes:string[];resumen:string;creada_en:string;actualizada_en:string;mensajes?:ConsultaBandeja[];mensajes_count?:number;estado_gestion?:string;cerrada_en?:string|null};
-export type ReportData={periodo:string;desde:string;hasta:string;canal:string;responsable:string;indicadores:Record<string,number>;canales:Record<string,number>;productos_consultados:[string,number][];origen_datos:string};
+export type ConsultaBandeja = {id:number;cliente:string;contacto:string;canal:string;texto:string;recibido_el:string;estado:'nueva'|'en_gestion'|'resuelta';oportunidad_id:number|null;ficha_id:number|null;leido_en:string|null;email_remitente:string;telefono_remitente:string;asunto:string;direccion?:'entrante'|'saliente';usuario?:string};
+
+/* Pipeline único de la gestión comercial (V4). */
+export type EstadoGestion='sin_atender'|'calificada'|'cotizada'|'muestra_piloto'|'concretada'|'no_concretada'|'resuelta';
+export const estadoGestionNombre:Record<string,string>={sin_atender:'Sin atender',calificada:'Calificada',cotizada:'Cotizada',muestra_piloto:'Muestra / piloto',concretada:'Concretada',no_concretada:'No concretada',resuelta:'Resuelta',fusionada:'Fusionada',en_gestion:'Calificada'};
+export const ESTADOS_ABIERTOS:EstadoGestion[]=['sin_atender','calificada','cotizada','muestra_piloto'];
+export const ESTADOS_GESTION:EstadoGestion[]=[...ESTADOS_ABIERTOS,'concretada','no_concretada','resuelta'];
+export const esCerrada=(estado?:string)=>!ESTADOS_ABIERTOS.includes((estado||'sin_atender') as EstadoGestion);
+export const MOTIVOS_NO_CONCRETADA=['Precio','Volumen bajo el mínimo','Plazo','Sin respuesta del cliente','Eligió otro proveedor','Otro'];
+export type Respuesta={pendiente:boolean;horas:number;desde:string|null};
+export type FichaConsulta = {id:number;codigo:string;oportunidad_id:number|null;titulo:string;cliente:string;contacto:string;producto:string;cantidad:number|null;tipo_consulta:TipoConsulta;presentacion:string;packaging:string;requisitos:string[];datos_faltantes:string[];resumen:string;creada_en:string;actualizada_en:string;mensajes?:ConsultaBandeja[];mensajes_count?:number;estado_gestion?:string;cerrada_en?:string|null;motivo_cierre?:string;
+ formula?:'propia'|'desarrollo_pasmanter'|'sin_especificar';marca_registrada?:'si'|'no'|'sin_especificar';registro_anmat?:'si'|'no'|'en_tramite'|'sin_especificar';destino?:''|'local'|'exportacion';pais_destino?:string;plazo_deseado?:string;localidad?:string;responsable?:string;
+ cotizacion_monto?:number|null;cotizacion_moneda?:''|'ARS'|'USD';cotizacion_fecha?:string|null;cotizacion_validez_dias?:number|null;tipo_sugerido_ia?:number;
+ bajo_minimo?:boolean;lote_minimo?:number;datos_a_confirmar?:string[];campos_editados?:string[];canal_origen?:string;respuesta?:Respuesta;duplicados?:Duplicado[]};
+export type Duplicado={id:number;codigo:string;titulo:string;cliente:string;producto:string;estado_gestion:string;oportunidad_id:number|null;mensajes:number};
+export type GestionHilo={id:number;codigo:string;titulo:string;estado_gestion:string;tipo_consulta:TipoConsulta;tipo_sugerido_ia:number;cantidad:number|null;producto:string;responsable:string;cerrada_en:string|null;cotizacion_monto:number|null;cotizacion_moneda:string;bajo_minimo:boolean};
+export type Responsable={username:string;name:string;role:Rol};
+export const cotizacionTexto=(monto?:number|null,moneda?:string|null)=>monto==null||!moneda?'':`${moneda} ${monto.toLocaleString('es-AR',{maximumFractionDigits:2})}`;
+export const unidades=(n?:number|null)=>n==null?'':`${n.toLocaleString('es-AR')} u.`;
+export function tiempoSinRespuesta(horas:number){if(horas<1)return 'hace menos de 1 h';if(horas<48)return `hace ${horas} h`;return `hace ${Math.floor(horas/24)} días`}
+export type ReportBreakdown=Record<string,{concretadas:number;no_concretadas:number;tasa:number|null}>;
+export type ReportData={periodo:string;desde:string;hasta:string;canal:string;responsable:string;indicadores:Record<string,number>;canales:Record<string,number>;productos_consultados:[string,number][];origen_datos:string;
+ embudo?:{estado:string;cantidad:number;montos:Record<string,number>}[];conversion_por_tipo?:ReportBreakdown;conversion_por_canal?:ReportBreakdown;motivos_no_concretadas?:Record<string,number>;
+ tiempo_primera_respuesta?:{promedio_horas:number|null;respondidas:number;sin_respuesta_registrada:number;por_canal:Record<string,{promedio_horas:number|null;gestiones:number}>;por_vendedor:Record<string,{promedio_horas:number|null;gestiones:number}>};
+ alertas_sin_respuesta?:{ficha_id:number;codigo:string;cliente:string;horas:number;responsable:string}[];seguimientos_vencidos_detalle?:{id:number;titulo:string;inicio:string;cliente:string;ficha_codigo:string|null}[]};
 export type ReportResponse={title:string;question:string;report:string;data:ReportData;generated_at:string};

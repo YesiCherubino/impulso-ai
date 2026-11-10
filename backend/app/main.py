@@ -10,6 +10,8 @@ from openai import OpenAIError
 from . import ai, auth
 from .business_v2 import register_business_v2
 from .business_v3 import init_v3, register_business_v3
+from .business_v4 import (init_v4, register_business_v4, build_case_context, apply_analysis,
+                          sync_contact_followup, complete_contact_followup, create_case_for_contact)
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -33,6 +35,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
         init_db(db_path)
         auth.init_auth(db_path)
         init_v3(db_path)
+        init_v4(db_path)
         yield
 
     # Para demos públicas, la clave de acceso es obligatoria y no se expone en Next.js.
@@ -113,7 +116,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
 
     def all_items():
         with connect(db_path) as con:
-            rows = con.execute("SELECT * FROM oportunidades ORDER BY id").fetchall()
+            rows = con.execute("SELECT * FROM oportunidades WHERE fusionada_con IS NULL ORDER BY id").fetchall()
         return [to_opportunity(row, date.today()) for row in rows]
 
     @app.get("/api/health")
@@ -158,7 +161,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
         """UNIQUE identifica cada aviso; actualizar no duplica notificaciones."""
         stamp = datetime.now(timezone.utc).isoformat()
         with connect(db_path) as con:
-            for row in con.execute('SELECT id,cliente,texto,recibido_el FROM bandeja_consultas').fetchall():
+            for row in con.execute("SELECT id,cliente,texto,recibido_el FROM bandeja_consultas WHERE direccion<>'saliente'").fetchall():
                 con.execute('''INSERT OR IGNORE INTO notificaciones
                     (clave,tipo,referencia_id,titulo,detalle,creada_en)
                     VALUES (?,?,?,?,?,?)''',
@@ -166,7 +169,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
                      f"Nueva consulta · {row['cliente']}", row['texto'][:160], row['recibido_el']))
             con.execute("UPDATE notificaciones SET activa=0 WHERE tipo='seguimiento'")
             for row in con.execute('''SELECT id, cliente, ultimo_contacto, fecha_seguimiento, motivo_seguimiento FROM oportunidades
-                 WHERE estado NOT IN ('ganada','perdida')''').fetchall():
+                 WHERE estado NOT IN ('ganada','perdida') AND fusionada_con IS NULL''').fetchall():
                 try:
                     days = (date.today() - date.fromisoformat(row['ultimo_contacto'])).days
                     due = date.fromisoformat(row['fecha_seguimiento']) if row['fecha_seguimiento'] else None
@@ -191,6 +194,20 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
                       detalle, stamp))
                 con.execute('UPDATE notificaciones SET activa=1, detalle=? WHERE clave=?',
                             (detalle, key))
+            # Actividades de seguimiento vencidas cargadas en la Agenda (misma fuente que Reportes).
+            from .metrics import list_seguimientos_vencidos
+            for act in list_seguimientos_vencidos(con):
+                if act['origen'] == 'seguimiento_contacto':
+                    continue  # ya avisado arriba por el seguimiento programado del contacto
+                ref = act['oportunidad_id'] or 0
+                if not ref and act['ficha_id']:
+                    f = con.execute('SELECT oportunidad_id FROM fichas_consulta WHERE id=?', (act['ficha_id'],)).fetchone()
+                    ref = (f['oportunidad_id'] if f else 0) or 0
+                key = f"actividad:{act['id']}:{act['inicio']}"
+                detalle = f"Vencido · {act['titulo']}"
+                con.execute('''INSERT OR IGNORE INTO notificaciones (clave,tipo,referencia_id,titulo,detalle,creada_en,activa)
+                     VALUES (?,?,?,?,?,?,1)''', (key, 'seguimiento', ref, f"Seguimiento · {act['cliente'] or act['titulo']}", detalle, stamp))
+                con.execute('UPDATE notificaciones SET activa=1 WHERE clave=?', (key,))
 
     @app.get('/api/notifications')
     def notifications(request: Request):
@@ -216,6 +233,17 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
                 (notification_id, user_id, datetime.now(timezone.utc).isoformat()))
         return {'ok': True}
 
+    @app.post('/api/notifications/read-all', dependencies=[Depends(require_access)])
+    def read_all_notifications(request: Request):
+        user_id = current_user_id(request)
+        sync_notifications()
+        with connect(db_path) as con:
+            con.execute('''INSERT OR IGNORE INTO notificaciones_lecturas
+                (notificacion_id, usuario_id, leida_en)
+                SELECT id, ?, ? FROM notificaciones WHERE activa=1''',
+                (user_id, datetime.now(timezone.utc).isoformat()))
+        return {'ok': True}
+
     class NuevaConsulta(BaseModel):
         cliente: str = Field(min_length=2, max_length=120)
         contacto: str = Field(min_length=2, max_length=120)
@@ -235,6 +263,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
 
     class AnalizarBandejaInput(BaseModel):
         regenerar: bool = False
+        informar_lote_minimo: bool = False
 
     class GuardarBorradorInput(BaseModel):
         borrador: str = Field(max_length=7000)
@@ -259,15 +288,18 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
     @app.post('/api/inbox/{message_id}/analysis',dependencies=[Depends(require_access)])
     def analyze_saved_inbox(message_id: int,payload: AnalizarBandejaInput):
         with connect(db_path) as con:
-            msg = con.execute('SELECT texto FROM bandeja_consultas WHERE id=?',(message_id,)).fetchone()
+            msg = con.execute('SELECT texto,ficha_id FROM bandeja_consultas WHERE id=?',(message_id,)).fetchone()
             if msg is None:
                 raise HTTPException(404,'Consulta no encontrada')
             existing = last_analysis(con,message_id)
-        if existing and not payload.regenerar:
+            # La IA recibe la gestión completa: datos de la ficha + todos los mensajes, de todos los canales.
+            texto = (build_case_context(con, msg['ficha_id'], message_id, payload.informar_lote_minimo)
+                     if msg['ficha_id'] else msg['texto'])
+        if existing and existing['resultado'] is not None and not payload.regenerar:
             return existing
         reserve_ai_call()
         try:
-            result = app.state.analizar_consulta(msg['texto'])
+            result = app.state.analizar_consulta(texto)
         except (OpenAIError,RuntimeError,ValueError) as exc:
             logger.warning('Falló análisis de bandeja: %s',type(exc).__name__)
             raise HTTPException(503,'No se pudo preparar la respuesta') from exc
@@ -275,6 +307,9 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
         draft = payload_data.get('respuesta_sugerida','')
         stamp = datetime.now(timezone.utc).isoformat()
         with connect(db_path) as con:
+            if msg['ficha_id']:
+                # La ficha es la fuente de verdad: se completan vacíos y se corrige lo ya informado.
+                payload_data = apply_analysis(con, msg['ficha_id'], payload_data, payload.regenerar)
             con.execute('''INSERT INTO consultas_analisis
               (consulta_id,version,resultado_json,borrador,generado_en,actualizado_en)
               VALUES (?,?,?,?,?,?)''',
@@ -285,12 +320,18 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
     @app.post('/api/inbox/{message_id}/draft',dependencies=[Depends(require_access)])
     def save_saved_draft(message_id: int,payload: GuardarBorradorInput):
         with connect(db_path) as con:
+            if not con.execute('SELECT id FROM bandeja_consultas WHERE id=?',(message_id,)).fetchone():
+                raise HTTPException(404,'Mensaje no encontrado')
             row = last_analysis(con,message_id)
-            if row is None:
-                raise HTTPException(404,'No hay un borrador guardado')
             stamp = datetime.now(timezone.utc).isoformat()
-            con.execute('UPDATE consultas_analisis SET borrador=?,actualizado_en=? WHERE id=?',
-                        (payload.borrador,stamp,row['id']))
+            if row is None:
+                # A human-written draft must not require or consume an AI call.
+                con.execute('''INSERT INTO consultas_analisis
+                    (consulta_id,version,resultado_json,borrador,generado_en,actualizado_en)
+                    VALUES (?,?,?, ?,?,?)''', (message_id,1,'null',payload.borrador,stamp,stamp))
+            else:
+                con.execute('UPDATE consultas_analisis SET borrador=?,actualizado_en=? WHERE id=?',
+                            (payload.borrador,stamp,row['id']))
             return last_analysis(con,message_id)
 
     class CambiarEstadoConsulta(BaseModel):
@@ -356,6 +397,8 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
             con.execute("INSERT INTO interacciones (oportunidad_id, tipo, descripcion, fecha) VALUES (?, 'consulta', ?, ?)",
                         (cur.lastrowid, "Oportunidad creada manualmente", today))
             new_id = cur.lastrowid
+            # El estado comercial vive en la gestión: cada contacto nuevo nace con una gestión.
+            create_case_for_contact(con, con.execute('SELECT * FROM oportunidades WHERE id=?', (new_id,)).fetchone())
         return get_opportunity(new_id)
 
     @app.post('/api/opportunities/{opportunity_id}/commercial-details', response_model=OportunidadDetalle,
@@ -385,6 +428,9 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
                                if due else 'Se eliminó la fecha de seguimiento programada')
                 con.execute('''INSERT INTO interacciones (oportunidad_id,tipo,descripcion,fecha)
                     VALUES (?,'nota',?,?)''', (opportunity_id, description, date.today().isoformat()))
+            # El seguimiento programado se refleja en la Agenda (una sola fuente para vencidos).
+            cliente = con.execute('SELECT cliente FROM oportunidades WHERE id=?', (opportunity_id,)).fetchone()['cliente']
+            sync_contact_followup(con, opportunity_id, due, reason, cliente)
         return get_opportunity(opportunity_id)
 
     class CambiarEstadoComercial(BaseModel):
@@ -437,6 +483,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
                 if planned['fecha_seguimiento'] and interaction_date >= date.fromisoformat(planned['fecha_seguimiento']):
                     con.execute("UPDATE oportunidades SET fecha_seguimiento=NULL, motivo_seguimiento='' WHERE id=?",
                                 (opportunity_id,))
+                    complete_contact_followup(con, opportunity_id)
         return get_opportunity(opportunity_id)
 
     # El servicio se inyecta para permitir tests offline y para evitar llamadas reales en CI.
@@ -529,6 +576,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
 
     register_business_v2(app, db_path, reserve_ai_call)
     register_business_v3(app, db_path)
+    register_business_v4(app, db_path)
     return app
 
 app = create_app()

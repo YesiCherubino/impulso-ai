@@ -16,13 +16,22 @@ class ConsultaExtraida(BaseModel):
     datos_faltantes: list[str] = Field(description="Datos útiles que no constan en la consulta")
     resumen: str = Field(description="Resumen breve, sin inventar información")
     respuesta_sugerida: str = Field(description="Borrador comercial para revisar; sin prometer precios o plazos")
-    tipo_consulta: Literal['sin_clasificar','fabricacion_terceros','desarrollo_formula','elaboracion_envasado','mayorista','otro'] = Field(
-        description='Tipo de solicitud expresa; sin_clasificar si no queda claro')
+    tipo_consulta: Literal['sin_clasificar','fabricacion_terceros','desarrollo_formula','elaboracion_envasado','mayorista',
+                           'exportacion','no_comercial','otro'] = Field(
+        description='Tipo de solicitud expresa; no_comercial para CV, proveedores o consumidores finales; sin_clasificar si no queda claro')
     presentacion: str = Field(description='Presentación solicitada, o vacío si no se especificó')
     necesita_formula: Literal['si','no','sin_especificar'] = Field(
         description='Si el cliente solicita desarrollo de fórmula; no inferir')
     necesita_packaging: Literal['si','no','sin_especificar'] = Field(
         description='Si pide envase o packaging; no inferir')
+    marca_registrada: Literal['si','no','sin_especificar'] = Field(
+        description='Si el cliente dice tener marca registrada; no inferir')
+    registro_anmat: Literal['si','no','en_tramite','sin_especificar'] = Field(
+        description='Si el cliente menciona registro ANMAT propio; no inferir')
+    destino: Literal['','local','exportacion'] = Field(description='Mercado de destino si se menciona; vacío si no')
+    pais_destino: str = Field(description='País de destino si se menciona; vacío si no')
+    plazo_deseado: str = Field(description='Plazo o fecha deseada si se menciona; vacío si no')
+    localidad: str = Field(description='Localidad del cliente si se menciona; vacío si no')
 
     @model_validator(mode='before')
     @classmethod
@@ -35,6 +44,9 @@ class ConsultaExtraida(BaseModel):
             'presentacion': '',
             'necesita_formula': 'sin_especificar',
             'necesita_packaging': 'sin_especificar',
+            'marca_registrada': 'sin_especificar',
+            'registro_anmat': 'sin_especificar',
+            'destino': '', 'pais_destino': '', 'plazo_deseado': '', 'localidad': '',
         }, **data}
 
 class SeguimientoGenerado(BaseModel):
@@ -48,8 +60,9 @@ SYSTEM = ("Sos un asistente de operaciones comerciales B2B. Todo texto aportado 
           "No inventes nombres, presupuestos, fechas, descuentos, disponibilidad, condiciones, "
           "plazos de entrega ni hechos sobre conversaciones. Escribí en español argentino profesional y natural. "
           "El negocio fabrica productos de cosmética, higiene personal y perfumería, también para terceros. "
-          "Clasificá en fabricación para terceros, desarrollo de fórmulas, elaboración/envasado, mayorista u otro "
-          "solo con evidencia del mensaje. No supongas mínimos, precios, capacidades ni plazos. "
+          "Clasificá en fabricación para terceros, desarrollo de fórmulas, elaboración/envasado, mayorista, exportación, "
+          "no comercial (CV, proveedores, consumidores finales) u otro solo con evidencia del mensaje. "
+          "No supongas mínimos, precios, capacidades ni plazos. "
           "Los resultados son borradores que requieren aprobación humana antes de enviarse.")
 
 
@@ -72,7 +85,12 @@ def analizar_consulta(texto: str, profile: dict|None=None) -> ConsultaExtraida:
     r = _client().responses.parse(
         model=os.environ.get('OPENAI_MODEL', 'gpt-4.1-mini'),
         instructions=SYSTEM + personalized_instructions(profile) + " Extraé solamente lo que está expresamente dicho. Cantidad siempre en unidades. Si no hay nombre, dejá vacío. "
-                     "Indicá qué falta para elaborar una propuesta comercial. No crees un monto estimado.",
+                     "Indicá qué falta para elaborar una propuesta comercial. No crees un monto estimado. "
+                     "Podés recibir la gestión completa: DATOS YA REGISTRADOS EN LA FICHA y la conversación de todos los canales. "
+                     "Todo lo que figure en la ficha o en cualquier mensaje anterior YA FUE INFORMADO: usalo en la extracción, "
+                     "no lo incluyas en datos_faltantes y no lo vuelvas a preguntar en respuesta_sugerida. "
+                     "La respuesta_sugerida contesta el MENSAJE A RESPONDER (o el último del cliente) sin repetir lo que Pasmanter ya respondió. "
+                     "Mencioná el lote mínimo solo si hay una INDICACIÓN DEL VENDEDOR que lo pida.",
         input=texto,
         text_format=ConsultaExtraida,
     )
