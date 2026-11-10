@@ -72,7 +72,7 @@ export const cotizacionTexto=(monto?:number|null,moneda?:string|null)=>monto==nu
 export const unidades=(n?:number|null)=>n==null?'':`${n.toLocaleString('es-AR')} u.`;
 export function tiempoSinRespuesta(horas:number){if(horas<1)return 'hace menos de 1 h';if(horas<48)return `hace ${horas} h`;return `hace ${Math.floor(horas/24)} días`}
 export type ReportBreakdown=Record<string,{concretadas:number;no_concretadas:number;tasa:number|null}>;
-export type ReportData={periodo:string;desde:string;hasta:string;canal:string;responsable:string;indicadores:Record<string,number>;canales:Record<string,number>;productos_consultados:[string,number][];origen_datos:string;
+export type ReportData={periodo:string;desde:string;hasta:string;canal:string;responsable:string;indicadores:Record<string,number>;monto_concretado?:Record<string,number>;canales:Record<string,number>;productos_consultados:[string,number][];origen_datos:string;
  embudo?:{estado:string;cantidad:number;montos:Record<string,number>}[];conversion_por_tipo?:ReportBreakdown;conversion_por_canal?:ReportBreakdown;motivos_no_concretadas?:Record<string,number>;
  tiempo_primera_respuesta?:{promedio_horas:number|null;respondidas:number;sin_respuesta_registrada:number;por_canal:Record<string,{promedio_horas:number|null;gestiones:number}>;por_vendedor:Record<string,{promedio_horas:number|null;gestiones:number}>};
  alertas_sin_respuesta?:{ficha_id:number;codigo:string;cliente:string;horas:number;responsable:string;conversacion:string}[];seguimientos_vencidos_detalle?:{id:number;titulo:string;inicio:string;cliente:string;ficha_codigo:string|null;conversacion:string}[]};
@@ -93,7 +93,7 @@ export type Empresa={razon_social:string;domicilio:string;telefono:string;email:
 export type ItemMiDia={ficha_id:number;codigo:string;cliente:string;titulo?:string;conversacion:string};
 export type ActividadMiDia={id:number;titulo:string;tipo:string;inicio:string;fin:string|null;cliente:string;ficha_id:number|null;oportunidad_id:number|null;responsable:string;notas:string;ficha_codigo:string|null;conversacion:string};
 export type TarjetaMiDia={ficha_id:number;codigo:string;cliente:string;contacto:string;titulo:string;estado_gestion:string;tipo_consulta:TipoConsulta;cantidad:number|null;responsable:string;pendiente:boolean;horas:number;ultimo_mensaje_en:string|null;canal:string;bajo_minimo:boolean;conversacion:string};
-export type MiDia={pulso?:number[];usuario:string;propio:boolean;fecha:string;dias_seguimiento:number;usuarios:{usuario:string;nombre:string}[];
+export type MiDia={usuario:string;propio:boolean;fecha:string;dias_seguimiento:number;usuarios:{usuario:string;nombre:string}[];
  resumen:{asignadas:number;asignadas_sin_responder:number;sin_asignar:number;sin_asignar_sin_responder:number;actividades_hoy:number;vencidas:number};
  asignadas:TarjetaMiDia[];sin_asignar:TarjetaMiDia[];actividades_hoy:ActividadMiDia[];actividades_vencidas:ActividadMiDia[];
  seguimientos_sugeridos:(ItemMiDia&{dias:number;cotizacion:{monto:number|null;moneda:string};mensaje_id:number|null})[]};

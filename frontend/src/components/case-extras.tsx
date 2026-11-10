@@ -20,6 +20,7 @@ export function CaseTimeline({data,open,onToggle,ownerName}:{data:Historial;open
   if(e.tipo==='responsable')return e.valor?<>asignó a <b>{ownerName(e.valor)}</b></>:<>dejó la gestión sin asignar</>;
   if(e.tipo==='cotizacion')return <>generó la cotización <b>{e.valor}</b> · {e.detalle}</>;
   if(e.tipo==='derivacion')return e.valor?<>derivó a <b>{e.valor}</b></>:<>quitó la derivación</>;
+  if(e.tipo==='contacto')return <>{e.detalle||'vinculó el contacto'}</>;
   if(e.tipo==='aceptacion')return <>{e.detalle} (<b>{e.valor}</b>)</>;
   return <>{e.tipo} {e.valor}</>};
  return <section className="v7-life" aria-label="Línea de vida de la gestión">

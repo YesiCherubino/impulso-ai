@@ -256,18 +256,6 @@ def board_item(r, lote) -> dict:
             'conversacion': str(conv_key(r))}
 
 
-def pulse(con, start: datetime) -> list[int]:
-    """Consultas entrantes por hora del día (hora de Argentina)."""
-    counts = [0] * 24
-    for r in con.execute("SELECT recibido_el FROM bandeja_consultas WHERE direccion<>'saliente' AND recibido_el>=?", (start.isoformat(),)):
-        t = parse_dt(r['recibido_el'])
-        if t:
-            h = int((t - start).total_seconds() // 3600)
-            if 0 <= h < 24:
-                counts[h] += 1
-    return counts
-
-
 def my_day(con, user, usuario: str = '') -> dict:
     """Tablero personal: asignadas al usuario y sin asignar, más seguimientos y actividades del día.
     Administración y gerencia pueden ver el tablero de otro vendedor."""
@@ -317,7 +305,6 @@ def my_day(con, user, usuario: str = '') -> dict:
         'actividades_hoy': hoy, 'actividades_vencidas': vencidas[:15],
         'seguimientos_sugeridos': followups_due(con, 'AND f.responsable=?', [target], int(cfg['dias_seguimiento']))[:15],
         'dias_seguimiento': int(cfg['dias_seguimiento']),
-        'pulso': pulse(con, start),
     }
 
 

@@ -16,6 +16,8 @@ from .comercial_v5 import init_v5, register_v5
 from .equipo import init_equipo, register_equipo
 from .permisos import init_permisos, register_permisos
 from .historial import init_historial, register_historial
+from .cotizaciones_lista import register_cotizaciones_lista
+from .ia_personal import init_ia_personal, register_ia_personal, usuario_actual, perfil as ia_perfil
 from .business_v4 import (init_v4, register_business_v4, build_case_context, apply_analysis,
                           sync_contact_followup, complete_contact_followup, create_case_for_contact)
 from fastapi import FastAPI, HTTPException, Request, Depends
@@ -47,6 +49,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
         init_equipo(db_path)
         init_permisos(db_path)
         init_historial(db_path)
+        init_ia_personal(db_path)
         yield
 
     # Para demos públicas, la clave de acceso es obligatoria y no se expone en Next.js.
@@ -90,6 +93,10 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
 
     @app.middleware('http')
     async def protect_private_api(request: Request, call_next):
+        # Quién pide: para aplicar sus preferencias personales del asistente de IA.
+        if os.getenv('AUTH_ENABLED', 'false').lower() == 'true' and request.method == 'POST' and request.url.path.startswith('/api/'):
+            who = auth.get_user(db_path, request.headers.get('x-session-token', ''))
+            usuario_actual.set(who['username'] if who else '')
         if (os.getenv('AUTH_ENABLED', 'false').lower() == 'true'
                 and request.url.path.startswith('/api/')
                 and request.url.path not in ('/api/health', '/api/auth/login', '/api/auth/logout')
@@ -531,12 +538,10 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
 
     # El servicio se inyecta para permitir tests offline y para evitar llamadas reales en CI.
     def get_ai_profile():
-        with connect(db_path) as con:
-            try:
-                row=con.execute('SELECT * FROM ia_configuracion WHERE id=1').fetchone()
-                return dict(row) if row else {}
-            except Exception:
-                return {}
+        try:
+            return ia_perfil(db_path)
+        except Exception:
+            return {}
     app.state.analizar_consulta = lambda texto: ai.analizar_consulta(texto, get_ai_profile())
     app.state.generar_seguimiento = lambda contexto: ai.generar_seguimiento(contexto, get_ai_profile())
     app.state.transformar_texto = lambda accion, texto: ai.transformar_texto(accion, texto, get_ai_profile())
@@ -627,6 +632,8 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
     register_equipo(app, db_path)
     register_permisos(app, db_path)
     register_historial(app, db_path)
+    register_ia_personal(app, db_path)
+    register_cotizaciones_lista(app, db_path)
     return app
 
 app = create_app()

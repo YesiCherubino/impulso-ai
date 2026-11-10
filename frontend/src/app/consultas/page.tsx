@@ -1,6 +1,6 @@
 'use client';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
-import {Check,ChevronDown,ChevronRight,FileText,Mail,MessageCircle,Plus,Search,X,CalendarDays,MoreHorizontal,FolderOpen,Send,AlertTriangle,UserCheck,Archive,RotateCcw,Sparkles,Clock3,EyeOff,History,Loader2,Paperclip,Receipt,StickyNote,Languages,Wand2,ListChecks,Forward,Undo2,MessagesSquare} from 'lucide-react';
+import {Check,ChevronDown,ChevronRight,FileText,Mail,MessageCircle,Plus,Search,X,CalendarDays,MoreHorizontal,FolderOpen,Send,AlertTriangle,UserCheck,Archive,RotateCcw,Sparkles,Clock3,EyeOff,History,Loader2,Paperclip,Receipt,StickyNote,Languages,Wand2,ListChecks,Forward,Undo2,MessagesSquare,Link2,FileDown} from 'lucide-react';
 import Link from 'next/link';
 import Shell from '@/components/shell';
 import CaseDialog from '@/components/case-dialog';
@@ -42,6 +42,11 @@ export default function BandejaConsultas(){
  activeMessageIdRef.current=activeMessage?.id??null;
  const cases=detail?.fichas||[];
  const currentCase=cases.find(c=>c.id===activeCase);
+ // Última cotización de la gestión abierta, para tenerla a mano en la conversación.
+ type UltimaCot={id:number;numero:string;fecha:string;validez_dias:number;moneda:string;total:number;token?:string|null;aceptada_en?:string|null};
+ const [ultimaCot,setUltimaCot]=useState<UltimaCot|null>(null),[cotCopiada,setCotCopiada]=useState(false);
+ const loadUltimaCot=useCallback(async(id:number|null)=>{if(!id){setUltimaCot(null);return}try{const l=await api<UltimaCot[]>(`/api/fichas/${id}/cotizaciones`);setUltimaCot(l[0]||null)}catch{setUltimaCot(null)}},[]);
+ useEffect(()=>{setCotCopiada(false);void loadUltimaCot(activeCase)},[activeCase,loadUltimaCot]);
  const params=useMemo(()=>({estado:filter,canal:channel,responsable:ownerFilter,tipo:typeFilter,q:query,orden:order}),[filter,channel,ownerFilter,typeFilter,query,order]);
 
  // Listado paginado: el servidor filtra y ordena; el navegador solo recibe la página visible.
@@ -196,6 +201,7 @@ export default function BandejaConsultas(){
     <span className="v4-chat-avatar" aria-hidden="true">{(detail?.cliente||'·').charAt(0).toUpperCase()}</span>
     <div className="v4-chat-person"><h2>{detail?.cliente||'Cargando…'}</h2><small>{detail?`${detail.contacto} · ${detail.mensajes_count} mensaje${detail.mensajes_count!==1?'s':''}`:''}</small></div>
     {detail&&activeMessage&&<button type="button" className="btn btn-outline btn-sm" aria-label="Informe de la consulta" aria-busy={generating==='report'} onClick={()=>{if(analysis)setShowReport(v=>!v);else void generate('report')}} disabled={busy}><FileText size={15}/> <span className="v5-hide-mobile">{generating==='report'?'Generando…':showReport?'Ocultar informe':'Informe'}</span></button>}
+    {detail&&currentCase&&!readonly&&!esCerrada(currentCase.estado_gestion)&&<button type="button" className="btn btn-outline btn-sm" onClick={()=>setQuoteCase(currentCase.id)} title="Armar una cotización para esta gestión"><Receipt size={15}/> <span className="v5-hide-mobile">Cotizar</span></button>}
     {detail&&<div className="v4-more-wrap">
      <button className="v4-icon-action" type="button" aria-label="Más acciones de la conversación" aria-expanded={moreMenu} onClick={()=>{setMoreMenu(v=>!v);setCaseMenu(false);setAiMenu(false)}}><MoreHorizontal size={21}/></button>
      {moreMenu&&<div className="v4-more-popover v5-popover-down">
@@ -203,7 +209,6 @@ export default function BandejaConsultas(){
       {!readonly&&activeMessage&&<button type="button" className="v4-menu-item" onClick={()=>{setMoreMenu(false);void markUnread()}} disabled={busy}><EyeOff size={16}/> Marcar como no leído</button>}
       <Link className="v4-menu-item" href={`/agenda?ficha=${activeCase||''}`}><CalendarDays size={16}/> Agendar actividad</Link>
       {activeCase&&<button type="button" className="v4-menu-item" onClick={()=>{setMoreMenu(false);setFormCase(activeCase)}}><FolderOpen size={16}/> Abrir gestión</button>}
-      {activeCase&&!readonly&&<button type="button" className="v4-menu-item" onClick={()=>{setMoreMenu(false);setQuoteCase(activeCase)}}><Receipt size={16}/> Cotizar (PDF)</button>}
       {currentCase&&user&&<button type="button" className="v4-menu-item" onClick={()=>{setMoreMenu(false);window.dispatchEvent(new CustomEvent('impulso:compartir-gestion',{detail:{ficha_id:currentCase.id,codigo:currentCase.codigo,cliente:currentCase.cliente,titulo:currentCase.titulo}}))}}><MessagesSquare size={16}/> Consultar con un compañero</button>}
       {activeCase&&<button type="button" className="v4-menu-item" onClick={()=>{setMoreMenu(false);setNotesOpen(true);setShowReport(false);setDeriveArea(currentCase?.derivada_a||'')}}><StickyNote size={16}/> Notas internas y derivar</button>}
       {!readonly&&<button type="button" className="v4-menu-item" onClick={()=>void aiText('resumir')} disabled={busy}><ListChecks size={16}/> Resumir conversación con IA</button>}
@@ -231,6 +236,15 @@ export default function BandejaConsultas(){
      {currentCase.bajo_minimo&&<span className="v5-chip is-warning"><AlertTriangle size={11}/> Bajo mínimo</span>}
      {currentCase.derivada_a&&<button type="button" className="v5-chip is-ai" onClick={()=>{setNotesOpen(true);setDeriveArea(currentCase.derivada_a||'')}}><Forward size={11}/> {currentCase.derivada_a}</button>}
     </div>}
+    {currentCase&&ultimaCot&&(()=>{const q=ultimaCot;const vence=new Date(`${q.fecha}T12:00:00`);vence.setDate(vence.getDate()+q.validez_dias);
+     const est=q.aceptada_en?'aceptada':vence<new Date()?'vencida':'enviada';
+     return <div className="v8-quote-line"><Receipt size={14} aria-hidden="true"/><strong>{q.numero}</strong><span>{q.moneda} {q.total.toLocaleString('es-AR',{maximumFractionDigits:2})}</span>
+      <span className={`v8-quote-state is-${est}`}>{est==='aceptada'?'Aceptada':est==='vencida'?'Vencida':'Enviada'}</span>
+      <small>{est==='aceptada'?fechaCorta(q.aceptada_en):`${est==='vencida'?'venció':'vence'} ${vence.toLocaleDateString('es-AR',{day:'numeric',month:'short'})}`}</small>
+      <span className="v8-quote-line-actions">
+       {q.token&&<button type="button" className="icon-button" title="Copiar enlace para el cliente" aria-label="Copiar enlace de la cotización" onClick={()=>{void navigator.clipboard.writeText(`${window.location.origin}/c/${q.token}`).then(()=>{setCotCopiada(true);setTimeout(()=>setCotCopiada(false),2000)}).catch(()=>setError('No se pudo copiar el enlace'))}}>{cotCopiada?<Check size={14}/>:<Link2 size={14}/>}</button>}
+       <button type="button" className="icon-button" title="Abrir PDF" aria-label="Abrir PDF de la cotización" onClick={()=>void api<ArchivoB64>(`/api/cotizaciones/${q.id}/pdf`).then(abrirArchivo).catch(e=>setError(String(e)))}><FileDown size={14}/></button>
+      </span></div>})()}
    </div>
    {detail.mensaje_tras_cierre&&!readonly&&detail.gestion&&<div className="v5-banner is-attention v5-chat-banner"><AlertTriangle size={16}/><span>Nuevo mensaje en una gestión cerrada ({detail.gestion.codigo} · {estadoGestionNombre[detail.gestion.estado_gestion]}).</span><button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={()=>void act(()=>api(`/api/fichas/${detail.gestion!.id}/estado`,{method:'POST',body:JSON.stringify({estado:'calificada'})}),'Gestión reabierta')}><RotateCcw size={14}/> Reabrir</button><button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={()=>void newCaseForLatest()}><Plus size={14}/> Nueva gestión</button></div>}
    {needsFollowup&&!readonly&&!detail.mensaje_tras_cierre&&<div className="v5-banner is-info v5-chat-banner"><Send size={16}/><span>Enviaste {currentCase?.estado_gestion==='cotizada'?'la cotización':'la propuesta'} hace {daysQuiet} días y el cliente no respondió.</span><button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={suggestFollowup}><Sparkles size={14}/> Preparar seguimiento con IA</button></div>}
@@ -310,7 +324,7 @@ export default function BandejaConsultas(){
   </div>
  </div>}
  {!selected&&notice&&<div className="v4-toast" role="status"><Check size={15}/>{notice}<button type="button" onClick={()=>setNotice('')} aria-label="Cerrar aviso"><X size={13}/></button></div>}
- {quoteCase&&<QuoteDialog fichaId={quoteCase} onClose={()=>setQuoteCase(null)} onSaved={msg=>{void refreshAll();setNotice(msg)}}/>}
+ {quoteCase&&<QuoteDialog fichaId={quoteCase} onClose={()=>setQuoteCase(null)} onSaved={msg=>{void refreshAll();void loadUltimaCot(activeCase);setNotice(msg)}}/>}
  {formCase&&<CaseDialog fichaId={formCase} onClose={()=>{setFormCase(null);void refreshAll()}} readOnly={readonly}/>}
  </Shell>;
 }

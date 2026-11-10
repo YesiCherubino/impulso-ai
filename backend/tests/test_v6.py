@@ -77,8 +77,8 @@ def test_report_detail_history_public_quote(tmp_path, monkeypatch):
         c.post(f"/api/fichas/{m3['ficha_id']}/no-comercial", headers=h)
         c.post(f"/api/fichas/{m3['ficha_id']}/no-comercial/deshacer", headers=h, json={'tipo_consulta': 'sin_clasificar', 'estado_gestion': 'sin_atender'})
         assert c.get(f"/api/fichas/{m3['ficha_id']}", headers=h).json()['estado_gestion'] == 'sin_atender'
-        # Pulso del día y calificación del rubro.
-        assert sum(c.get('/api/mi-dia', headers=h).json()['pulso']) >= 3
+        # Mi día sin pulso y calificación del rubro.
+        assert 'pulso' not in c.get('/api/mi-dia', headers=h).json()
         f = c.get(f"/api/fichas/{m3['ficha_id']}", headers=h).json()
         body = {k: f[k] for k in ('titulo', 'cliente', 'contacto', 'producto', 'cantidad', 'presentacion', 'packaging', 'resumen')}
         r = c.post(f"/api/fichas/{m3['ficha_id']}/edit", headers=h, json={**body, 'tipo_consulta': 'produccion_terceros', 'rubro': 'Higiene',

@@ -1,12 +1,20 @@
 'use client';
 import {useCallback,useEffect,useState} from 'react';
-import {FileDown,Send,X} from 'lucide-react';
+import {FileDown,Send,X,Info} from 'lucide-react';
 import Link from 'next/link';
 import Shell from '@/components/shell';
 import ExportButton from '@/components/export-button';
 import {api,qs,ReportData,ReportResponse,UsuarioSesion,Responsable,estadoGestionNombre,fechaCorta,puede,cotizacionTexto,guardarArchivo} from '@/lib/api';
 
-const TARJETAS:[string,string][]=[['consultas_recibidas','Consultas recibidas'],['sin_atender','Sin atender'],['en_gestion','En gestión'],['concretadas','Concretadas'],['no_concretadas','No concretadas'],['no_leidas','No leídas'],['contactos_activos','Contactos activos'],['seguimientos_vencidos','Seguimientos vencidos'],['sin_contacto_7_dias','Sin contacto +7 días']];
+/* Tres grupos de tres: qué entra, qué está en curso y cómo termina. "alerta" se marca solo si es mayor a 0. */
+type Tarjeta={k:string;n:string;alerta?:'warn'|'danger'};
+const GRUPOS:{titulo:string;nota:string;items:Tarjeta[]}[]=[
+ {titulo:'Entrada',nota:'del período',items:[{k:'consultas_recibidas',n:'Consultas recibidas'},{k:'no_leidas',n:'No leídas',alerta:'warn'},{k:'sin_atender',n:'Sin atender',alerta:'danger'}]},
+ {titulo:'Seguimiento',nota:'hoy',items:[{k:'en_gestion',n:'En gestión'},{k:'seguimientos_vencidos',n:'Seguimientos vencidos',alerta:'danger'},{k:'sin_contacto_7_dias',n:'Sin contacto +7 días',alerta:'warn'}]},
+ {titulo:'Resultado',nota:'del período',items:[{k:'concretadas',n:'Concretadas'},{k:'no_concretadas',n:'No concretadas'},{k:'monto_concretado',n:'Monto concretado'}]}];
+const PERIODOS=[['semana','7 días'],['mes','Este mes'],['trimestre','90 días'],['todos','Histórico']];
+const CANALES=[['todos','Todos'],['WhatsApp','WhatsApp'],['Correo','Email'],['Formulario web','Web']];
+const compacto=(n:number)=>n>=1e6?`${(n/1e6).toLocaleString('es-AR',{maximumFractionDigits:1})} M`:n>=1e4?`${(n/1e3).toLocaleString('es-AR',{maximumFractionDigits:0})} mil`:n.toLocaleString('es-AR',{maximumFractionDigits:0});
 type Detalle={total:number;items:{ficha_id:number|null;oportunidad_id?:number;codigo:string;cliente:string;titulo:string;estado_gestion:string;responsable:string;fecha:string|null;conversacion:string;monto?:number|null;moneda?:string}[]};
 const examples=['Resumen del mes para gerencia','¿Qué productos se consultaron más?','¿Cómo vienen las cotizaciones?','¿Qué canal trae más consultas?'];
 
@@ -30,14 +38,20 @@ export default function Reportes(){
  return <Shell>
   <div className="v2-page-head"><h1>Reportes</h1>{puede(user,'exportar')&&<ExportButton path={`/api/export/reporte?${qs({period,canal:channel,responsable:todos?responsable:''})}`} onError={setError}/>}</div>
   {error&&<p className="alert error" role="alert">{error}</p>}
-  <section className="panel v7-summary">
-   <div className="v7-filters">
-    <label>Período<select value={period} onChange={e=>setPeriod(e.target.value)}><option value="semana">Últimos 7 días</option><option value="mes">Este mes</option><option value="trimestre">Últimos 90 días</option><option value="todos">Histórico</option></select></label>
-    <label>Canal<select value={channel} onChange={e=>setChannel(e.target.value)}><option value="todos">Todos</option><option value="WhatsApp">WhatsApp</option><option value="Correo">Email</option><option value="Formulario web">Formulario web</option></select></label>
-    {todos?<label>Vendedor<select value={responsable} onChange={e=>setResponsable(e.target.value)}><option value="">Todos</option>{owners.map(o=><option key={o.username} value={o.username}>{o.name}</option>)}</select></label>:user&&<span className="v7-scope">Tus gestiones</span>}
+  <section className="panel v7-summary v8-summary">
+   <div className="v8-filters">
+    <div className="v7-seg" role="group" aria-label="Período">{PERIODOS.map(([v,l])=><button key={v} type="button" className={period===v?'is-on':''} onClick={()=>setPeriod(v)}>{l}</button>)}</div>
+    <div className="v7-seg" role="group" aria-label="Canal">{CANALES.map(([v,l])=><button key={v} type="button" className={channel===v?'is-on':''} onClick={()=>setChannel(v)}>{l}</button>)}</div>
+    {todos?<select aria-label="Vendedor" value={responsable} onChange={e=>setResponsable(e.target.value)}><option value="">Todos los vendedores</option>{owners.map(o=><option key={o.username} value={o.username}>{o.name}</option>)}</select>:user&&<span className="v8-tag">Tus gestiones</span>}
+    {data&&<span className="v8-info" tabIndex={0} title={data.origen_datos} aria-label={data.origen_datos}><Info size={15}/></span>}
    </div>
-   <div className="v7-cards">{TARJETAS.map(t=><button type="button" key={t[0]} className="v7-stat" onClick={()=>void show(t)}><small>{t[1]}</small><strong>{data?.indicadores[t[0]]??'—'}</strong></button>)}</div>
-   {data&&<p className="v7-note">{data.origen_datos}</p>}
+   <div className="v8-groups">{GRUPOS.map(g=><section key={g.titulo} className="v8-group" aria-label={g.titulo}><h2>{g.titulo} <small>{g.nota}</small></h2>
+    <div className="v8-stats">{g.items.map(t=>{
+     const monto=t.k==='monto_concretado';const montos=Object.entries(data?.monto_concretado||{});
+     const v=monto?montos.length:(data?.indicadores[t.k]??null);
+     const cls=v===null?'':v===0?'is-zero':t.alerta?`is-${t.alerta}`:'';
+     return <button type="button" key={t.k} className={`v8-stat ${cls}`} onClick={()=>void show([t.k,t.n])}><small>{t.n}</small>
+      {monto?<strong className="v8-money">{montos.length?montos.map(([m,x])=><span key={m}><em>{m}</em> {compacto(x)}</span>):'—'}</strong>:<strong>{v??'—'}</strong>}</button>})}</div></section>)}</div>
   </section>
   {puede(user,'reporte_ia')&&<section className="panel v7-ai-report"><h2>Reportes con IA</h2>
    <form className="v7-ask" onSubmit={e=>void ask(e)}><input aria-label="Pedí un reporte" placeholder={todos?'Pedí un reporte: “resumen del mes por vendedor”':'Pedí un reporte sobre tus gestiones'} value={prompt} onChange={e=>setPrompt(e.target.value)} maxLength={1000}/><button type="submit" className="btn btn-primary" disabled={busy||!prompt.trim()}><Send size={15}/> {busy?'Generando…':'Generar'}</button></form>

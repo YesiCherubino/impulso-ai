@@ -207,6 +207,11 @@ def report_data(con, *, period='mes', canal='todos', responsable='', user=None) 
         'periodo': period, 'desde': since_iso, 'hasta': today.isoformat(), 'canal': canal,
         'responsable': responsible or 'Todos',
         'indicadores': indicadores,
+        # Monto de las gestiones concretadas en el período, por moneda (no se suman monedas distintas).
+        'monto_concretado': {r['m']: round(r['t'], 2) for r in con.execute(
+            f'''SELECT f.cotizacion_moneda AS m, SUM(f.cotizacion_monto) AS t FROM fichas_consulta f WHERE {base}
+                AND f.estado_gestion='concretada' AND f.cerrada_en>=? AND f.cotizacion_monto IS NOT NULL
+                AND COALESCE(f.cotizacion_moneda,'')<>'' GROUP BY f.cotizacion_moneda''', [*args, since_iso]) if r['t']},
         'canales': channel_counts,
         'productos_consultados': [(r['p'], r['n']) for r in productos],
         'embudo': embudo,
@@ -219,7 +224,7 @@ def report_data(con, *, period='mes', canal='todos', responsable='', user=None) 
                                            'ficha_codigo': v['ficha_codigo'],
                                            'conversacion': str(v['conv']) if v['conv'] is not None else ''} for v in vencidos[:20]],
         'gestiones_consideradas': one(f'SELECT COUNT(*) FROM fichas_consulta f WHERE {base}'),
-        'origen_datos': ('Recibidas y cierres según el período; pendientes y vencidos, situación actual. '
+        'origen_datos': ('Entrada y resultado según el período elegido; seguimiento, situación actual. '
                          'No incluye consultas no comerciales.'),
     }
 
@@ -230,7 +235,7 @@ def page(sql: str, limit: int) -> str:
 
 
 INDICADORES_DETALLE = ('consultas_recibidas', 'no_leidas', 'sin_atender', 'en_gestion', 'contactos_activos', 'concretadas',
-                       'no_concretadas', 'seguimientos_vencidos', 'sin_contacto_7_dias')
+                       'no_concretadas', 'seguimientos_vencidos', 'sin_contacto_7_dias', 'monto_concretado')
 
 
 def report_detail(con, indicador: str, *, period='mes', canal='todos', responsable='', user=None, limit=50) -> dict:
@@ -255,9 +260,11 @@ def report_detail(con, indicador: str, *, period='mes', canal='todos', responsab
         cond = f"{open_base} AND f.estado_gestion<>'sin_atender'"
     elif indicador == 'contactos_activos':
         cond = f'{open_base} AND f.oportunidad_id IS NOT NULL'
-    elif indicador in ('concretadas', 'no_concretadas'):
-        estado = 'concretada' if indicador == 'concretadas' else 'no_concretada'
+    elif indicador in ('concretadas', 'no_concretadas', 'monto_concretado'):
+        estado = 'no_concretada' if indicador == 'no_concretadas' else 'concretada'
         cond, extra, order = f"{base} AND f.estado_gestion='{estado}' AND f.cerrada_en>=?", [since_iso], 'f.cerrada_en DESC'
+        if indicador == 'monto_concretado':
+            cond += " AND f.cotizacion_monto IS NOT NULL AND COALESCE(f.cotizacion_moneda,'')<>''"
     elif indicador == 'seguimientos_vencidos':
         rows = list_seguimientos_vencidos(con, responsible)
         return {'total': len(rows), 'items': [{'ficha_id': r['ficha_id'], 'codigo': r['ficha_codigo'] or '', 'cliente': r['cliente'],
@@ -280,6 +287,6 @@ def report_detail(con, indicador: str, *, period='mes', canal='todos', responsab
     rows = con.execute(page_sql(f'SELECT f.* FROM fichas_consulta f WHERE {cond} ORDER BY {order}', int(limit), 0), [*args, *extra]).fetchall()
     return {'total': total, 'items': [{'ficha_id': r['id'], 'codigo': r['codigo'], 'cliente': r['cliente'], 'titulo': r['titulo'],
                                        'estado_gestion': r['estado_gestion'], 'responsable': r['responsable'],
-                                       'fecha': r['cerrada_en'] if indicador in ('concretadas', 'no_concretadas') else (r['ultimo_mensaje_en'] or r['actualizada_en']),
+                                       'fecha': r['cerrada_en'] if indicador in ('concretadas', 'no_concretadas', 'monto_concretado') else (r['ultimo_mensaje_en'] or r['actualizada_en']),
                                        'monto': r['cotizacion_monto'], 'moneda': r['cotizacion_moneda'],
                                        'conversacion': str(r['oportunidad_id'] if r['oportunidad_id'] else -r['id'])} for r in rows]}

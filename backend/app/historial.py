@@ -66,3 +66,43 @@ def register_historial(app: FastAPI, db_path: Path):
         current(request, db_path)
         with connect(db_path) as con:
             return timeline(con, ficha_id)
+
+    @app.post('/api/fichas/{ficha_id}/crear-contacto')
+    def create_contact(ficha_id: int, request: Request):
+        """Crea (o vincula, si coincide exacto por correo o teléfono) el contacto de una gestión que no lo tiene."""
+        from .business_v2 import sender_email, sender_phone
+        from .permisos import require
+        user = current(request, db_path)
+        require(db_path, user, 'contactos')
+        with connect(db_path) as con:
+            f = con.execute('SELECT * FROM fichas_consulta WHERE id=?', (ficha_id,)).fetchone()
+            if not f:
+                raise HTTPException(404, 'Gestión no encontrada')
+            if f['oportunidad_id']:
+                return {'oportunidad_id': f['oportunidad_id'], 'creado': False}
+            m = con.execute('''SELECT email_remitente, telefono_remitente, canal FROM bandeja_consultas
+                               WHERE ficha_id=? ORDER BY id LIMIT 1''', (ficha_id,)).fetchone()
+            email = sender_email((m['email_remitente'] if m else '') or '')
+            phone = sender_phone((m['telefono_remitente'] if m else '') or '')
+            hits = con.execute('''SELECT id FROM oportunidades WHERE (? <> '' AND LOWER(email)=?) OR (? <> '' AND telefono=?)''',
+                               (email, email, phone, phone)).fetchall()
+            creado = False
+            if len(hits) == 1:
+                opp = hits[0]['id']
+            else:
+                today = now_iso()[:10]
+                cur = con.execute('''INSERT INTO oportunidades
+                  (cliente,contacto,producto,cantidad,monto_estimado_usd,estado,creada_el,ultimo_contacto,notas,
+                   tipo_consulta,canal_origen,presentacion,packaging,responsable,email,telefono)
+                  VALUES (?,?,?,?,NULL,'nueva',?,?,'',?,?,?,?,?,?,?)''',
+                  (f['cliente'] or 'Sin nombre', f['contacto'] or '', f['producto'] or 'Sin especificar', f['cantidad'],
+                   today, today, f['tipo_consulta'] or 'sin_clasificar', (m['canal'] if m else '') or 'Manual',
+                   f['presentacion'] or '', f['packaging'] or '', f['responsable'] or '', email, phone))
+                opp = cur.lastrowid
+                con.execute("INSERT INTO interacciones (oportunidad_id,tipo,descripcion,fecha) VALUES (?,'consulta',?,?)",
+                            (opp, f'Contacto creado desde la gestión {f["codigo"]}', today))
+                creado = True
+            con.execute('UPDATE fichas_consulta SET oportunidad_id=? WHERE id=?', (opp, ficha_id))
+            con.execute('UPDATE bandeja_consultas SET oportunidad_id=? WHERE ficha_id=?', (opp, ficha_id))
+            log(con, ficha_id, 'contacto', str(opp), 'creó el contacto' if creado else 'vinculó el contacto', user.get('username', '') if user else '')
+            return {'oportunidad_id': opp, 'creado': creado}

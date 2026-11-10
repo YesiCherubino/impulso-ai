@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import {usePathname,useRouter} from 'next/navigation';
 import {useEffect,useState} from 'react';
-import {Inbox,ContactRound,CalendarDays,FileCheck2,FileText,Settings,LogOut,BookOpen,Menu,X,Sun,Search,MessagesSquare,Eye} from 'lucide-react';
+import {Inbox,ContactRound,CalendarDays,FileCheck2,FileText,Settings,LogOut,BookOpen,Menu,X,Sun,Search,MessagesSquare,Eye,Receipt} from 'lucide-react';
 import Notifications from '@/components/notifications';
 import ImpulsoMark from '@/components/impulso-mark';
 import CommandPalette from '@/components/command-palette';
@@ -13,6 +13,7 @@ const nav=[
  {href:'/mi-dia',label:'Mi día',icon:Sun},
  {href:'/consultas',label:'Bandeja',icon:Inbox},
  {href:'/',label:'Contactos',icon:ContactRound},
+ {href:'/cotizaciones',label:'Cotizaciones',icon:Receipt},
  {href:'/agenda',label:'Agenda',icon:CalendarDays},
  {href:'/finalizados',label:'Finalizados',icon:FileCheck2},
  {href:'/resumen-gerencial',label:'Reportes',icon:FileText},
@@ -52,7 +53,7 @@ export default function Shell({children}:{children:React.ReactNode}){
    <div className="office-brand-row"><Link href="/mi-dia" className="brand v2-brand v7-brand" onClick={go('/mi-dia')}><span className="impulso-mark" aria-hidden="true"><ImpulsoMark/></span><strong>Impulso</strong></Link><button className="office-close-menu" onClick={()=>setMenuOpen(false)} aria-label="Cerrar menú"><X size={19}/></button></div>
    <nav className="side-nav" aria-label="Navegación principal">{nav.map(item=>{const Icon=item.icon;const active=item.href==='/'?pathname==='/':pathname.startsWith(item.href);return <Link key={item.href} href={item.href} className={active?'active':''} aria-current={active?'page':undefined} onClick={go(item.href)}><Icon size={17} strokeWidth={1.6}/><span>{item.label}</span></Link>})}</nav>
    <div className="office-sidebar-footer v2-sidebar-footer">
-    <div className="v2-user-label"><span className="v2-avatar">{(user?.name||'Usuario').slice(0,1).toUpperCase()}</span><span><strong>{user?.name||'Usuario'}</strong><small>{roleName[user?.rol_real||user?.role||'ventas']}</small></span></div>
+    <div className="v2-user-label"><span className="v2-avatar">{(user?.name||'Usuario').slice(0,1).toUpperCase()}</span><span><strong>{user?.name||'Usuario'}</strong>{user&&<small className={`v8-role is-${user.rol_real||user.role}`}>{roleName[user.rol_real||user.role]}</small>}</span></div>
     {isAdmin&&<label className="v7-pref"><span><Eye size={14}/> Ver como</span><select aria-label="Ver como" value={user?.viendo_como||''} onChange={e=>setVerComo(e.target.value as ''|'ventas'|'gerencia')}><option value="">Administrador</option><option value="ventas">Ventas</option><option value="gerencia">Gerencia</option></select></label>}
     {authEnabled&&<button type="button" className="v2-footer-action" onClick={()=>void signOut()}><LogOut size={17} strokeWidth={1.6}/> Cerrar sesión</button>}
     <a href="/guia-de-uso.pdf" className="v2-footer-action" target="_blank" rel="noopener noreferrer"><BookOpen size={17} strokeWidth={1.6}/> Guía de usuario</a>

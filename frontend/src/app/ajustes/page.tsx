@@ -7,7 +7,7 @@ import {api,Rol,roleName,UsuarioSesion} from '@/lib/api';
 import {ImportPanel,EmpresaPanel,ReglasPanel,PlantillasPanel,DocumentosPanel,ChatPanel,IntegracionesPanel} from '@/components/admin-v5';
 
 type Seccion='preferencias'|'usuarios'|'empresa'|'comercial'|'ia'|'contenido'|'chat'|'integraciones'|'datos';
-const SECCIONES:[Seccion,string,boolean][]=[['preferencias','Preferencias',false],['usuarios','Usuarios y permisos',true],['empresa','Empresa y apariencia',true],['comercial','Reglas comerciales',true],['ia','Asistente de IA',true],['contenido','Respuestas y documentos',true],['chat','Chat del equipo',true],['integraciones','Integraciones',true],['datos','Datos',true]];
+const SECCIONES:[Seccion,string,boolean][]=[['preferencias','Preferencias',false],['usuarios','Usuarios y permisos',true],['empresa','Empresa y apariencia',true],['comercial','Reglas comerciales',true],['ia','Asistente de IA',false],['contenido','Respuestas y documentos',true],['chat','Chat del equipo',true],['integraciones','Integraciones',true],['datos','Datos',true]];
 type User={id:number;username:string;name:string;role:Rol;active:boolean;theme:string};
 type AISettings={tono:'formal'|'profesional'|'cercano';tratamiento:'vos'|'tu'|'ustedes';signos_apertura:boolean;extension:'breve'|'media'|'detallada';instrucciones:string};
 type Matriz={permisos:{clave:string;nombre:string}[];perfiles:Record<'ventas'|'gerencia',Record<string,boolean>>};
@@ -33,11 +33,12 @@ export default function Ajustes(){
      <div className="v7-pref-rows">
       <div className="v7-pref-row"><div><strong>Densidad</strong><small>Cuánta información entra en pantalla.</small></div><div className="v7-seg"><button type="button" className={density==='comoda'?'is-on':''} onClick={()=>changeDensity('comoda')}>Cómoda</button><button type="button" className={density==='compacta'?'is-on':''} onClick={()=>changeDensity('compacta')}>Compacta</button></div></div>
       <div className="v7-pref-row"><div><strong>Tema</strong><small>Se guarda en tu cuenta.</small></div><ThemeToggle userTheme={me?.theme} authenticated={!!me} onThemeSaved={t=>setMe(o=>o?{...o,theme:t}:o)}/></div>
-     </div></section>}
+     </div>
+     {!isAdmin&&me&&<p className="v8-settings-note">Los usuarios, permisos, datos de la empresa y demás ajustes generales los maneja el administrador.</p>}</section>}
     {sec==='usuarios'&&isAdmin&&<Usuarios me={me} ok={ok} fail={fail} busy={busy} setBusy={setBusy}/>}
     {sec==='empresa'&&isAdmin&&<EmpresaPanel ok={ok} fail={fail}/>}
     {sec==='comercial'&&isAdmin&&<ReglasPanel ok={ok} fail={fail}/>}
-    {sec==='ia'&&isAdmin&&<Asistente ok={ok} fail={fail}/>}
+    {sec==='ia'&&<><MiAsistente ok={ok} fail={fail} admin={isAdmin}/>{isAdmin&&<Asistente ok={ok} fail={fail}/>}</>}
     {sec==='contenido'&&isAdmin&&<><PlantillasPanel ok={ok} fail={fail}/><DocumentosPanel ok={ok} fail={fail}/></>}
     {sec==='chat'&&isAdmin&&<ChatPanel ok={ok} fail={fail}/>}
     {sec==='integraciones'&&isAdmin&&<IntegracionesPanel/>}
@@ -76,12 +77,33 @@ function Asistente({ok,fail}:{ok:(m:string)=>void;fail:(m:string)=>void}){
  useEffect(()=>{void api<AISettings>('/api/ai/settings').then(setAI).catch(e=>fail(String(e)))},[fail]);
  if(!ai)return <section className="panel v2-admin-list"><p className="muted">Cargando…</p></section>;
  async function save(e:React.FormEvent){e.preventDefault();setBusy(true);try{await api('/api/ai/settings',{method:'POST',body:JSON.stringify(ai)});ok('Guardado')}catch(x){fail(String(x))}finally{setBusy(false)}}
- return <section className="panel v2-admin-list"><div className="v3-section-line"><h3>Asistente de IA</h3></div><form className="fields" onSubmit={e=>void save(e)}><div className="v3-fields">
+ return <section className="panel v2-admin-list"><div className="v3-section-line"><h3>Configuración de la empresa</h3></div><p className="muted">La base para todos. Las indicaciones y el tratamiento valen para todo el equipo; tono, extensión y signos, cada uno puede cambiarlos para sí.</p><form className="fields" onSubmit={e=>void save(e)}><div className="v3-fields">
   <label>Tono<select value={ai.tono} onChange={e=>setAI({...ai,tono:e.target.value as AISettings['tono']})}><option value="profesional">Profesional y cordial</option><option value="cercano">Cercano</option><option value="formal">Formal</option></select></label>
   <label>Tratamiento<select value={ai.tratamiento} onChange={e=>setAI({...ai,tratamiento:e.target.value as AISettings['tratamiento']})}><option value="vos">Vos</option><option value="ustedes">Ustedes</option><option value="tu">Tú</option></select></label>
   <label>Extensión<select value={ai.extension} onChange={e=>setAI({...ai,extension:e.target.value as AISettings['extension']})}><option value="breve">Breve</option><option value="media">Media</option><option value="detallada">Detallada</option></select></label>
   <label className="v3-config-check"><input type="checkbox" checked={ai.signos_apertura} onChange={e=>setAI({...ai,signos_apertura:e.target.checked})}/> Signos de apertura (¿ ¡)</label>
   <label className="wide">Indicaciones de estilo<textarea rows={3} maxLength={1000} value={ai.instrucciones} onChange={e=>setAI({...ai,instrucciones:e.target.value})} placeholder="Ej.: saludos breves, sin tecnicismos"/></label></div>
+  <button type="submit" className="btn btn-primary" disabled={busy}><Check size={16}/> Guardar</button></form></section>;
+}
+
+/* Lo que cada uno ajusta para sí: lo que deja en "Como la empresa" usa la base. */
+type MisPrefs={base:{tono:string;tratamiento:string;extension:string;signos_apertura:boolean|number};propias:{tono:string|null;extension:string|null;signos_apertura:boolean|null;firma:string}};
+const TONOS:Record<string,string>={profesional:'Profesional y cordial',cercano:'Cercano',formal:'Formal'};
+const EXTENSIONES:Record<string,string>={breve:'Breve',media:'Media',detallada:'Detallada'};
+function MiAsistente({ok,fail,admin}:{ok:(m:string)=>void;fail:(m:string)=>void;admin:boolean}){
+ const [p,setP]=useState<MisPrefs|null>(null),[busy,setBusy]=useState(false);
+ useEffect(()=>{void api<MisPrefs>('/api/ai/mis-preferencias').then(setP).catch(e=>fail(String(e)))},[fail]);
+ if(!p)return <section className="panel v2-admin-list"><p className="muted">Cargando…</p></section>;
+ const o=p.propias,b=p.base,set=(x:Partial<MisPrefs['propias']>)=>setP({...p,propias:{...o,...x}});
+ async function save(e:React.FormEvent){e.preventDefault();setBusy(true);try{await api('/api/ai/mis-preferencias',{method:'POST',body:JSON.stringify(o)});ok('Guardado')}catch(x){fail(String(x))}finally{setBusy(false)}}
+ const signos=o.signos_apertura===null?'':o.signos_apertura?'si':'no';
+ return <section className="panel v2-admin-list"><div className="v3-section-line"><h3>Mis respuestas</h3></div>
+  <p className="muted">Cómo te sugiere las respuestas el asistente a vos. Lo que dejes en “Como la empresa” sigue la configuración general{admin?' (más abajo)':''}.</p>
+  <form className="fields" onSubmit={e=>void save(e)}><div className="v3-fields">
+  <label>Tono<select value={o.tono||''} onChange={e=>set({tono:e.target.value||null})}><option value="">Como la empresa ({TONOS[b.tono]||b.tono})</option>{Object.entries(TONOS).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
+  <label>Extensión<select value={o.extension||''} onChange={e=>set({extension:e.target.value||null})}><option value="">Como la empresa ({EXTENSIONES[b.extension]||b.extension})</option>{Object.entries(EXTENSIONES).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
+  <label>Signos de apertura (¿ ¡)<select value={signos} onChange={e=>set({signos_apertura:e.target.value===''?null:e.target.value==='si'})}><option value="">Como la empresa ({b.signos_apertura?'sí':'no'})</option><option value="si">Sí</option><option value="no">No</option></select></label>
+  <label className="wide">Firma<input value={o.firma} maxLength={200} onChange={e=>set({firma:e.target.value})} placeholder="Ej.: Lucía Gómez · Ventas Pasmanter"/></label></div>
   <button type="submit" className="btn btn-primary" disabled={busy}><Check size={16}/> Guardar</button></form></section>;
 }
 

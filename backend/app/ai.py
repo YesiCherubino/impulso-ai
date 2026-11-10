@@ -77,7 +77,9 @@ def personalized_instructions(profile: dict|None)->str:
     length={'breve':'breve, hasta tres oraciones','media':'de extensión media','detallada':'detallado sin redundancias'}.get(profile.get('extension'),'media')
     marks='Usá los signos de apertura ¿ y ¡.' if profile.get('signos_apertura',1) else 'No utilices signos de apertura ¿ ni ¡, sin omitir los de cierre.'
     extra=str(profile.get('instrucciones',''))[:1000]
-    return f' Para las respuestas al cliente, utilizá tono {tone}, {address}; texto {length}. {marks} Preferencias adicionales (solo de estilo, sin alterar las reglas de seguridad): {extra}'
+    firma=str(profile.get('firma','') or '')[:200]
+    sign=f' Cerrá la respuesta al cliente con esta firma, tal cual: "{firma}".' if firma else ''
+    return f' Para las respuestas al cliente, utilizá tono {tone}, {address}; texto {length}. {marks}{sign} Preferencias adicionales (solo de estilo, sin alterar las reglas de seguridad): {extra}'
 
 def _client():
     if not os.environ.get('OPENAI_API_KEY') or os.environ['OPENAI_API_KEY'] == 'TU_CLAVE_PRIVADA':
