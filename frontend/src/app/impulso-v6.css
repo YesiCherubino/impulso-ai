@@ -1,0 +1,314 @@
+/* Impulso V6 — identidad propia.
+   Papel cálido y tinta en claro, grafito cálido en oscuro. Un solo color de acento, configurable por cliente
+   (--brand, desde Administración). Menos cajas, menos íconos, menos pastillas: herramienta de trabajo.
+   Esta capa va al final y redefine los tokens de las capas anteriores. */
+
+html{--brand:#2e6a57}
+html[data-theme] .office-app.v2-office{
+ --bg:#f4f2ec;--panel:#fbfaf7;--panel-2:#efece5;--line:#e2ddd2;--line-2:#d3cdc0;
+ --ink:#1d2024;--ink-2:#5f5d57;--ink-3:#8b887f;
+ --accent:var(--brand);--accent-ink:#fff;--accent-soft:color-mix(in oklab,var(--brand) 11%,var(--panel));
+ --danger:#a8402f;--danger-soft:#f4e1db;--warn:#8a5a10;--warn-soft:#f3e8d2;--ok:#2f6b4f;
+ --radius:6px;--shadow:0 12px 32px rgba(30,25,15,.14);
+ /* Compatibilidad con las capas anteriores */
+ --v3-panel:var(--panel);--v3-panel-alt:var(--panel-2);--v3-ink:var(--ink);--v3-muted:var(--ink-2);--v3-border:var(--line);
+ --v3-highlight:var(--accent-soft);--v3-accent:var(--accent);
+ --v2-accent:var(--accent);--v2-ink:var(--ink);--v2-line:var(--line);--v2-soft:var(--panel-2);--v2-muted:var(--ink-2);
+ --pine:var(--accent);--pine-dark:var(--accent);--mint:var(--accent-soft);--surface:var(--bg);--border:var(--line);--white:var(--panel);
+ --dark-panel:var(--panel);--dark-line:var(--line);--dark-text:var(--ink);--dark-subtle:var(--ink-2);--dark-soft:var(--panel-2);--dark-raised:var(--panel-2);
+ --v5-warn-bg:var(--warn-soft);--v5-warn-ink:var(--warn);--v5-danger-bg:var(--danger-soft);--v5-danger-ink:var(--danger);
+ --v5-info-bg:var(--accent-soft);--v5-info-ink:var(--accent);--v5-ok-ink:var(--ok);--v5-out-bg:var(--accent-soft);
+ font-family:'Instrument Sans Variable',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
+ font-feature-settings:'ss01','cv11';color:var(--ink);background:var(--bg);
+}
+html[data-theme='dark'] .office-app.v2-office{
+ --bg:#191816;--panel:#211f1d;--panel-2:#2a2825;--line:#36332f;--line-2:#45413b;
+ --ink:#ece8e1;--ink-2:#aaa59b;--ink-3:#7d786f;
+ --accent:color-mix(in oklab,var(--brand) 58%,#fff);--accent-ink:#141312;--accent-soft:color-mix(in oklab,var(--brand) 22%,var(--panel));
+ --danger:#ee9a87;--danger-soft:#3b2421;--warn:#e8c27a;--warn-soft:#352b1b;--ok:#93c9ae;
+ --shadow:0 14px 40px rgba(0,0,0,.45);
+}
+html[data-theme] body{background:#f4f2ec}
+html[data-theme='dark'] body{background:#191816}
+
+/* ---------- Base ---------- */
+html[data-theme] .office-app.v2-office :is(h1,h2,h3,h4){letter-spacing:-.01em;color:var(--ink)}
+html[data-theme] .office-app.v2-office :is(.muted,small){color:var(--ink-2)}
+html[data-theme] .office-app.v2-office a{color:inherit}
+html[data-theme] .office-app.v2-office :is(.v2-sync,.v5-amount,.v6-time,td,.v4-message-meta){font-variant-numeric:tabular-nums}
+html[data-theme] .office-app.v2-office .content{background:var(--bg);padding:28px 36px 64px}
+html[data-theme] .office-app.v2-office .workspace{background:var(--bg)}
+
+/* ---------- Barra lateral y superior ---------- */
+html[data-theme] .office-app.v2-office .sidebar{background:var(--panel-2);border-color:var(--line);width:232px}
+html[data-theme] .office-app.v2-office .v2-brand{margin-bottom:36px}
+html[data-theme] .office-app.v2-office :is(.v2-brand strong,.brand strong){color:var(--ink);letter-spacing:-.02em}
+html[data-theme] .office-app.v2-office :is(.v2-brand small,.brand small,.side-group-label){color:var(--ink-3);letter-spacing:.08em}
+html[data-theme] .office-app.v2-office .impulso-mark{color:var(--accent)}
+html[data-theme] .office-app.v2-office .side-nav a{border-radius:5px;padding:9px 12px;font-weight:500;font-size:13.5px;color:var(--ink-2);background:transparent;position:relative}
+html[data-theme] .office-app.v2-office .side-nav a:hover{background:color-mix(in oklab,var(--ink) 5%,transparent);color:var(--ink)}
+html[data-theme] .office-app.v2-office .side-nav a.active{background:var(--panel);color:var(--ink);font-weight:600;box-shadow:inset 2px 0 0 var(--accent)}
+html[data-theme] .office-app.v2-office .side-nav a svg{opacity:.75}
+html[data-theme] .office-app.v2-office :is(.office-sidebar-footer,.v2-sidebar-footer){border-color:var(--line)}
+html[data-theme] .office-app.v2-office :is(.v2-footer-action,.v2-user-label strong){color:var(--ink-2)}
+html[data-theme] .office-app.v2-office .v2-avatar{background:var(--accent-soft);color:var(--accent)}
+html[data-theme] .office-app.v2-office .topbar{background:var(--bg);border-color:var(--line);height:56px}
+html[data-theme] .office-app.v2-office :is(.top-label,.top-label span){color:var(--ink-3);font-weight:500}
+html[data-theme] .office-app.v2-office :is(.notification-trigger,.mobile-nav-toggle){background:transparent;border-color:transparent;color:var(--ink-2)}
+html[data-theme] .office-app.v2-office :is(.notification-trigger,.mobile-nav-toggle):hover{background:var(--panel-2)}
+
+/* ---------- Encabezado de página ---------- */
+html[data-theme] .office-app.v2-office .v2-page-head{margin-bottom:20px;align-items:flex-end}
+html[data-theme] .office-app.v2-office .v2-page-head h1{font-size:24px;font-weight:600;letter-spacing:-.025em;color:var(--ink);margin:2px 0 0}
+html[data-theme] .office-app.v2-office :is(.eyebrow,.section-eyebrow){color:var(--ink-3);letter-spacing:.08em;font-weight:600;font-size:10.5px}
+html[data-theme] .office-app.v2-office .v2-page-head>div>p{display:none}
+
+/* ---------- Superficies ---------- */
+html[data-theme] .office-app.v2-office :is(.panel,.v2-stat,.v3-board-column,.v3-board-card){background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:none}
+html[data-theme] .office-app.v2-office :is(.modal,.v3-thread-modal,.v3-case-dialog,.v4-chat-modal,.v6-quote){background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);color:var(--ink)}
+html[data-theme] .office-app.v2-office .v2-overlay{background:rgba(25,22,18,.42);backdrop-filter:blur(1.5px)}
+html[data-theme='dark'] .office-app.v2-office .v2-overlay{background:rgba(0,0,0,.55)}
+html[data-theme] .office-app.v2-office :is(.v3-section-line,.v3-dialog-head,.v4-chat-header,.v4-chat-context){border-color:var(--line)}
+
+/* Íconos decorativos fuera de los títulos: solo quedan en acciones. */
+html[data-theme] .office-app.v2-office :is(.v3-section-line h3,.v5-report-block h3,.v6-day-block h3,.v3-dialog-head h2,.v2-section-header h2,.v2-admin-list h3)>svg{display:none}
+
+/* ---------- Controles ---------- */
+html[data-theme] .office-app.v2-office :is(.btn,.icon-button){border-radius:5px;font-weight:550;letter-spacing:0;transition:background .12s,border-color .12s,color .12s}
+html[data-theme] .office-app.v2-office .btn{min-height:36px;padding:7px 14px;font-size:13px}
+html[data-theme] .office-app.v2-office .btn-sm{min-height:28px;padding:4px 10px;font-size:12px}
+html[data-theme] .office-app.v2-office .btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+html[data-theme] .office-app.v2-office .btn-primary:hover:not(:disabled){background:color-mix(in oklab,var(--accent) 86%,#000);border-color:transparent}
+html[data-theme] .office-app.v2-office :is(.btn-outline,.btn-quiet,.icon-button){background:transparent;border:1px solid var(--line-2);color:var(--ink)}
+html[data-theme] .office-app.v2-office :is(.btn-outline,.btn-quiet,.icon-button):hover:not(:disabled){background:var(--panel-2)}
+html[data-theme] .office-app.v2-office .btn:disabled{opacity:.45}
+html[data-theme] .office-app.v2-office :is(select,input,textarea){border-radius:5px;border:1px solid var(--line-2);background:var(--panel);color:var(--ink);min-height:36px;font-size:13px}
+html[data-theme] .office-app.v2-office :is(select,input,textarea):focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 18%,transparent);outline:none}
+html[data-theme] .office-app.v2-office :is(select,input,textarea,button,a):focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+html[data-theme] .office-app.v2-office .search{background:var(--panel);border:1px solid var(--line-2);border-radius:5px;color:var(--ink-3)}
+html[data-theme] .office-app.v2-office .search input{color:var(--ink);border:0!important;box-shadow:none!important;background:transparent}
+html[data-theme] .office-app.v2-office .v3-switch{background:transparent;border:0;padding:0;gap:2px;border-bottom:1px solid var(--line);border-radius:0}
+html[data-theme] .office-app.v2-office .v3-switch button{border-radius:0;padding:8px 11px;color:var(--ink-2);font-size:12.5px;border-bottom:2px solid transparent;margin-bottom:-1px;background:transparent;box-shadow:none}
+html[data-theme] .office-app.v2-office .v3-switch button.selected{color:var(--ink);border-bottom-color:var(--accent);font-weight:600;background:transparent;box-shadow:none}
+html[data-theme] .office-app.v2-office :is(.v4-icon-action,.v5-ai-button,.v6-attach){color:var(--ink-2)}
+html[data-theme] .office-app.v2-office .v3-text-action{color:var(--accent);font-weight:550}
+
+/* ---------- Etiquetas sobrias: texto con un punto, sin pastillas ---------- */
+html[data-theme] .office-app.v2-office .v5-chip{background:transparent;border:0;border-radius:0;padding:0;margin-right:10px;font-size:11.5px;color:var(--ink-2);font-weight:450;gap:5px}
+html[data-theme] .office-app.v2-office .v5-chip.is-state{color:var(--ink);font-weight:550}
+html[data-theme] .office-app.v2-office .v5-chip.is-state::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ink-3);flex-shrink:0}
+html[data-theme] .office-app.v2-office .v5-chip.is-sin_atender::before{background:var(--accent)}
+html[data-theme] .office-app.v2-office .v5-chip.is-calificada::before{background:#7a8b9c}
+html[data-theme] .office-app.v2-office :is(.v5-chip.is-cotizada,.v5-chip.is-muestra_piloto)::before{background:var(--ok)}
+html[data-theme] .office-app.v2-office .v5-chip.is-sin_atender,html[data-theme] .office-app.v2-office :is(.v5-chip.is-cotizada,.v5-chip.is-muestra_piloto){color:var(--ink);background:transparent}
+html[data-theme] .office-app.v2-office :is(.v5-chip.is-warning,.v5-chip.is-attention){color:var(--warn);background:transparent}
+html[data-theme] .office-app.v2-office .v5-chip.is-danger{color:var(--danger);background:transparent;font-weight:600}
+html[data-theme] .office-app.v2-office :is(.v5-chip.is-ai,.v5-chip.is-money){color:var(--ink-2);background:transparent}
+html[data-theme] .office-app.v2-office .v5-chip svg{width:11px;height:11px}
+html[data-theme] .office-app.v2-office :is(.v5-chip.is-ai) svg{display:none}
+html[data-theme] .office-app.v2-office :is(button.v5-chip){cursor:pointer;text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:3px}
+
+/* ---------- Avisos ---------- */
+html[data-theme] .office-app.v2-office .v5-banner{border-radius:5px;background:var(--panel-2);color:var(--ink);border-left:3px solid var(--ink-3)}
+html[data-theme] .office-app.v2-office :is(.v5-banner.is-warning,.v5-banner.is-attention){border-left-color:var(--warn);background:var(--warn-soft);color:var(--ink)}
+html[data-theme] .office-app.v2-office .v5-banner.is-info{border-left-color:var(--accent);background:var(--accent-soft);color:var(--ink)}
+html[data-theme] .office-app.v2-office .v5-chat-banner{border-radius:0;border-left:0;border-bottom:1px solid var(--line)}
+html[data-theme] .office-app.v2-office .alert.error{background:var(--danger-soft);color:var(--danger);border:0;border-radius:5px}
+html[data-theme] .office-app.v2-office .v3-success{background:var(--accent-soft);color:var(--ink);border:0;border-radius:5px}
+html[data-theme] .office-app.v2-office .v4-toast{background:var(--ink);color:var(--bg);border-radius:6px;box-shadow:var(--shadow)}
+
+/* ---------- Bandeja ---------- */
+html[data-theme] .office-app.v2-office .v2-inbox{padding:0;overflow:hidden}
+html[data-theme] .office-app.v2-office .v3-inbox-filters{padding:14px 18px;gap:12px;border-bottom:1px solid var(--line)}
+html[data-theme] .office-app.v2-office .v5-list-meta{background:transparent;color:var(--ink-3);border-color:var(--line)}
+html[data-theme] .office-app.v2-office .v3-conversations{gap:0}
+html[data-theme] .office-app.v2-office .v3-conversation{background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:13px 18px;box-shadow:none;color:var(--ink)}
+html[data-theme] .office-app.v2-office .v3-conversation:hover,html[data-theme] .office-app.v2-office .v3-conversation.is-focused{background:var(--panel-2)}
+html[data-theme] .office-app.v2-office .v3-conversation.is-focused{box-shadow:inset 2px 0 0 var(--accent)}
+html[data-theme] .office-app.v2-office .v3-conversation.is-unread{background:transparent}
+html[data-theme] .office-app.v2-office .v3-conversation.is-unread strong{font-weight:700}
+html[data-theme] .office-app.v2-office .v3-conversation.is-unread .v3-conversation-icon{color:var(--accent)}
+html[data-theme] .office-app.v2-office .v3-conversation-icon{background:transparent;border:0;color:var(--ink-3)}
+html[data-theme] .office-app.v2-office .v3-conversation-body>span:last-child{color:var(--ink-2)}
+html[data-theme] .office-app.v2-office .v3-unread-count{background:var(--accent);color:var(--accent-ink)}
+html[data-theme] .office-app.v2-office .v3-conversation.is-low{opacity:.72}
+
+/* ---------- Chat con el cliente ---------- */
+html[data-theme] .office-app.v2-office .v4-chat-transcript{background:var(--bg)}
+html[data-theme] .office-app.v2-office .v4-message-bubble{background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:3px 10px 10px 10px;max-width:min(78%,640px)}
+html[data-theme] .office-app.v2-office .v4-message-bubble.is-outgoing{background:var(--accent-soft);border-color:transparent;border-radius:10px 3px 10px 10px}
+html[data-theme] .office-app.v2-office .v4-message-bubble:hover,html[data-theme] .office-app.v2-office .v4-message-bubble.is-selected{border-color:var(--accent)}
+html[data-theme] .office-app.v2-office .v4-message-meta{color:var(--ink-3)}
+html[data-theme] .office-app.v2-office .v4-chat-day{background:transparent;color:var(--ink-3);border:0;font-size:11px;letter-spacing:.04em}
+html[data-theme] .office-app.v2-office .v4-chat-avatar{background:var(--accent-soft);color:var(--accent);border:0}
+html[data-theme] .office-app.v2-office .v5-composer{background:var(--panel);border-color:var(--line)}
+html[data-theme] .office-app.v2-office .v5-composer-row textarea{border-radius:8px;background:var(--panel)}
+html[data-theme] .office-app.v2-office :is(.v5-ai-button,.v6-attach){border-radius:8px;background:transparent;border:1px solid var(--line-2)!important}
+html[data-theme] .office-app.v2-office .v5-register{border-radius:8px}
+html[data-theme] .office-app.v2-office :is(.v5-ai-menu,.v4-more-popover,.v4-case-popover,.v6-slash){background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow)}
+html[data-theme] .office-app.v2-office .v4-menu-item{border-radius:4px;color:var(--ink);font-size:12.5px}
+html[data-theme] .office-app.v2-office :is(.v4-menu-item:hover,.v4-menu-item.is-current,.v6-slash>button.is-active,.v6-palette-list button.is-active){background:var(--panel-2)}
+html[data-theme] .office-app.v2-office .v4-menu-heading{color:var(--ink-3);letter-spacing:.06em}
+html[data-theme] .office-app.v2-office .v4-chat-report{background:var(--panel);border-color:var(--line)}
+html[data-theme] .office-app.v2-office .v6-note-list li{background:var(--panel-2);border-left-color:var(--warn)}
+html[data-theme] .office-app.v2-office .v6-note-list small{color:var(--ink-2)}
+
+/* ---------- Tablas y reportes ---------- */
+html[data-theme] .office-app.v2-office :is(.v5-mini-table th,.v6-items th){color:var(--ink-3);font-weight:550;text-transform:uppercase;font-size:10.5px;letter-spacing:.05em;background:transparent}
+html[data-theme] .office-app.v2-office :is(.v5-mini-table th,.v5-mini-table td,.v6-items td,.v6-items th){border-color:var(--line)}
+html[data-theme] .office-app.v2-office .v2-stat{padding:14px 16px}
+html[data-theme] .office-app.v2-office .v2-stat strong{font-weight:600;color:var(--ink)}
+html[data-theme] .office-app.v2-office .v2-stat.is-alert{border-color:var(--line);box-shadow:inset 3px 0 0 var(--danger)}
+html[data-theme] .office-app.v2-office .v2-stat.is-alert strong{color:var(--danger)}
+html[data-theme] .office-app.v2-office .v5-alert-list li{background:transparent;color:var(--ink);border-bottom:1px solid var(--line);border-radius:0}
+html[data-theme] .office-app.v2-office .v5-alert-list li svg:first-child{color:var(--danger)}
+html[data-theme] .office-app.v2-office .v5-reason-bars li{border-color:var(--line);border-radius:4px}
+html[data-theme] .office-app.v2-office .v6-bar{background:var(--panel-2);border:0;height:5px}
+html[data-theme] .office-app.v2-office .v6-totals{background:var(--panel-2);border-color:var(--line);border-radius:5px}
+html[data-theme] .office-app.v2-office .v3-user-row{border-color:var(--line)}
+
+/* ---------- Búsqueda global ---------- */
+html[data-theme] .office-app.v2-office .v6-search-trigger{background:var(--panel);border-color:var(--line-2);border-radius:5px;color:var(--ink-3)}
+html[data-theme] .office-app.v2-office .v6-palette{background:var(--panel);border-color:var(--line);border-radius:10px}
+html[data-theme] .office-app.v2-office .v6-palette-list button>svg:first-child{color:var(--ink-3)}
+html[data-theme] .office-app.v2-office kbd{background:var(--panel-2);border-color:var(--line-2);color:var(--ink-2)}
+
+/* ---------- Densidad compacta ---------- */
+html[data-density='compacta'] .office-app.v2-office .v3-conversation{padding:8px 18px}
+html[data-density='compacta'] .office-app.v2-office .v3-conversation-icon{display:none}
+html[data-density='compacta'] .office-app.v2-office :is(.v5-mini-table td,.v5-mini-table th){padding:5px 8px}
+html[data-density='compacta'] .office-app.v2-office .content{padding-top:18px}
+html[data-density='compacta'] .office-app.v2-office .v7-card{padding:7px 10px}
+html[data-density='compacta'] .office-app.v2-office .v4-chat-message-block{gap:6px}
+
+/* ---------- Movimiento sutil ---------- */
+@media (prefers-reduced-motion:no-preference){
+ html[data-theme] .office-app.v2-office :is(.modal,.v4-chat-modal,.v3-case-dialog,.v6-palette,.v7-chat){animation:v7-in .14s ease-out}
+ @keyframes v7-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+}
+
+/* =================================================================== Mi día: tablero */
+.v7-day-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.v7-day-head h1{margin:0;font-size:24px;font-weight:600;letter-spacing:-.025em}
+.v7-day-head .v7-date{font-size:12px;color:var(--ink-3);text-transform:capitalize;margin-bottom:2px}
+.v7-day-head select{min-width:200px}
+.v7-board{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+.v7-col{background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius);display:flex;flex-direction:column;min-height:240px;max-height:calc(100vh - 210px);transition:border-color .12s,background .12s}
+.v7-col.is-over{border-color:var(--accent);background:var(--accent-soft)}
+.v7-col-head{display:flex;align-items:center;gap:10px;padding:12px 14px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.v7-col-head h2{margin:0;font-size:14px;font-weight:600}
+.v7-col-head .v7-count{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.v7-col-head .v7-seg{margin-left:auto;display:flex;border:1px solid var(--line-2);border-radius:5px;overflow:hidden}
+.v7-seg button{border:0;background:transparent;padding:4px 10px;font-size:12px;color:var(--ink-2);cursor:pointer}
+.v7-seg button.is-on{background:var(--panel);color:var(--ink);font-weight:600}
+.v7-seg button+button{border-left:1px solid var(--line-2)}
+.v7-list{overflow-y:auto;padding:8px;display:grid;gap:6px;align-content:start;flex:1;min-height:80px}
+.v7-empty{padding:22px 10px;text-align:center;font-size:12.5px;color:var(--ink-3)}
+.v7-card{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;cursor:grab;transition:border-color .12s,box-shadow .12s,opacity .12s}
+.v7-card:hover{border-color:var(--line-2)}
+.v7-card.is-dragging{opacity:.45}
+.v7-card.is-pending{box-shadow:inset 2px 0 0 var(--warn)}
+.v7-card.is-late{box-shadow:inset 2px 0 0 var(--danger)}
+.v7-card strong{font-size:13.5px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v7-card .v7-sub{grid-column:1;font-size:12px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v7-card .v7-meta{grid-column:1;display:flex;flex-wrap:wrap;gap:0 12px;font-size:11.5px;color:var(--ink-3);margin-top:2px}
+.v7-card .v7-meta .is-late{color:var(--danger);font-weight:600}
+.v7-card .v7-meta .is-pending{color:var(--warn);font-weight:550}
+.v7-card .v7-actions{grid-column:2;grid-row:1/span 3;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:5px}
+.v7-card .v7-actions .btn{min-height:26px;padding:3px 9px;font-size:11.5px;display:inline-flex;align-items:center;gap:4px}
+.v7-move{display:none}
+.v7-lower{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px}
+.v7-block{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
+.v7-block h3{margin:0 0 6px;font-size:13.5px;font-weight:600;display:flex;align-items:baseline;gap:8px}
+.v7-block h3 small{font-weight:400;color:var(--ink-3);font-size:11.5px}
+.v7-rows{list-style:none;margin:0;padding:0}
+.v7-rows li{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:13px;min-width:0}
+.v7-rows li:first-child{border-top:0}
+.v7-rows .v7-when{font-variant-numeric:tabular-nums;color:var(--ink-3);font-size:12px;min-width:46px}
+.v7-rows .v7-when.is-late{color:var(--danger);font-weight:600}
+.v7-rows .v7-what{flex:1;min-width:0;display:grid}
+.v7-rows .v7-what strong{font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v7-rows .v7-what small{font-size:11.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v7-rows .btn{min-height:26px;padding:3px 9px;font-size:11.5px;flex-shrink:0;display:inline-flex;align-items:center;gap:4px}
+.v7-note{font-size:12px;color:var(--ink-3);margin:0}
+
+/* =================================================================== Chat del equipo */
+.v7-chat-trigger{position:relative}
+.v7-badge{position:absolute;top:2px;right:2px;min-width:16px;height:16px;border-radius:8px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;padding:0 4px}
+.v7-chat{position:fixed;top:0;right:0;bottom:0;width:min(400px,100vw);z-index:130;background:var(--panel);border-left:1px solid var(--line);box-shadow:var(--shadow);display:flex;flex-direction:column;color:var(--ink)}
+.v7-chat header{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);min-height:56px}
+.v7-chat header h2{margin:0;font-size:15px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v7-chat header .v7-back{border:0;background:transparent;color:var(--ink-2);cursor:pointer;padding:4px;display:grid;place-items:center}
+.v7-me{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:12.5px;flex-wrap:wrap}
+.v7-me select{min-height:30px;padding:4px 30px 4px 8px;font-size:12px}
+.v7-me input{flex:1;min-width:120px;min-height:30px;font-size:12px;padding:4px 8px}
+.v7-me label{display:flex;align-items:center;gap:5px;color:var(--ink-2);font-size:12px}
+.v7-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--ink-3)}
+.v7-dot.is-activo{background:#3f9a6c}
+.v7-dot.is-ausente{background:#d1a03c}
+.v7-dot.is-inactivo{background:transparent;border:1.5px solid var(--ink-3)}
+.v7-chat-scroll{flex:1;overflow-y:auto;min-height:0}
+.v7-section{padding:12px 14px 4px;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.v7-item{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;color:var(--ink);padding:8px 14px;text-align:left;cursor:pointer;font:inherit;font-size:13px}
+.v7-item:hover{background:var(--panel-2)}
+.v7-item .v7-item-body{flex:1;min-width:0;display:grid}
+.v7-item .v7-item-body small{font-size:11.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v7-item.is-unread strong{font-weight:700}
+.v7-item .v7-count{background:var(--accent);color:var(--accent-ink);border-radius:9px;font-size:10.5px;font-weight:700;min-width:18px;height:18px;display:grid;place-items:center;padding:0 5px}
+.v7-hash{width:18px;text-align:center;color:var(--ink-3);font-weight:600}
+.v7-msgs{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:2px;background:var(--bg);min-height:0}
+.v7-msg{display:grid;grid-template-columns:28px minmax(0,1fr);gap:0 9px;padding:5px 0}
+.v7-msg.is-cont{padding-top:0}
+.v7-msg.is-cont .v7-av{visibility:hidden;height:0}
+.v7-av{width:28px;height:28px;border-radius:6px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-size:12px;font-weight:700}
+.v7-msg-head{display:flex;align-items:baseline;gap:8px;font-size:12.5px}
+.v7-msg-head strong{font-weight:650}
+.v7-msg-head time{font-size:11px;color:var(--ink-3)}
+.v7-msg-text{font-size:13.5px;line-height:1.45;white-space:pre-wrap;word-wrap:break-word}
+.v7-msg.is-system .v7-msg-text{color:var(--ink-2)}
+.v7-mention{background:color-mix(in oklab,var(--warn) 18%,transparent);border-radius:3px;padding:0 2px;font-weight:600}
+.v7-ref{display:inline;border:0;background:transparent;padding:0;color:var(--accent);font:inherit;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.v7-gestion{margin-top:5px;display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel);border-radius:5px;padding:7px 10px;font-size:12px;text-align:left;cursor:pointer;color:var(--ink);width:100%}
+.v7-gestion span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v7-composer{border-top:1px solid var(--line);padding:10px 12px;display:grid;gap:6px;background:var(--panel)}
+.v7-composer textarea{width:100%;resize:none;min-height:40px;max-height:140px;border-radius:6px;padding:9px 11px;font:inherit;font-size:13px}
+.v7-composer-row{display:flex;align-items:center;gap:8px}
+.v7-composer-row small{flex:1;font-size:11px;color:var(--ink-3)}
+.v7-attached{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);background:var(--panel-2);border-radius:5px;padding:5px 8px}
+.v7-attached span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v7-attached button{border:0;background:transparent;color:var(--ink-3);cursor:pointer;display:grid}
+.v7-older{align-self:center;margin-bottom:6px}
+.v7-share{padding:12px 14px;border-bottom:1px solid var(--line);font-size:12.5px;background:var(--accent-soft);display:grid;gap:6px}
+.v7-chat-shade{position:fixed;inset:0;z-index:129;background:transparent}
+
+/* =================================================================== Atajos */
+.v7-keys{display:grid;grid-template-columns:auto 1fr;gap:8px 18px;font-size:13px;margin:0}
+.v7-keys dt{white-space:nowrap}
+.v7-keys dd{margin:0;color:var(--ink-2)}
+.v7-pref{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12.5px;color:var(--ink-2);padding:2px 4px}
+.v7-pref select{min-height:28px;padding:2px 26px 2px 8px;font-size:12px;max-width:110px}
+
+@media(max-width:900px){.v7-board,.v7-lower{grid-template-columns:1fr}.v7-col{max-height:none}}
+@media(max-width:720px){
+ html[data-theme] .office-app.v2-office .content{padding:16px 12px 56px}
+ .v7-move{display:inline-flex}
+ .v7-card{cursor:default}
+ .v7-day-head select{min-width:0;width:100%}
+}
+
+/* Login con la misma identidad */
+html[data-theme] .login-screen{background:#f4f2ec;font-family:'Instrument Sans Variable',ui-sans-serif,system-ui,sans-serif}
+html[data-theme='dark'] .login-screen{background:#191816}
+html[data-theme] .office-app.v2-office .v7-card .v7-move{display:none}
+.v7-card{cursor:pointer}
+.v7-card:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.v7-day-head .v7-date::first-letter{text-transform:uppercase}
+.v7-day-head .v7-date{text-transform:none}
+html[data-theme] .office-app.v2-office .v7-pref select{min-height:28px;font-size:12px}
+@media(max-width:720px){html[data-theme] .office-app.v2-office .v7-card .v7-move{display:inline-flex}}
+/* Las capas anteriores fuerzan colores azulados en modo oscuro: se reemplazan por los tokens. */
+html[data-theme] .office-app.v2-office :is(input:not([type="checkbox"]):not([type="color"]),textarea,select){background:var(--panel)!important;border-color:var(--line-2)!important;color:var(--ink)!important}
+html[data-theme] .office-app.v2-office .search input{background:transparent!important;border:0!important}
+html[data-theme] .office-app.v2-office :is(input,textarea,select):focus{border-color:var(--accent)!important}
+html[data-theme] .office-app.v2-office select option{background:var(--panel);color:var(--ink)}
+html[data-theme] .office-app.v2-office .v6-palette-input input{background:transparent!important;border:0!important}

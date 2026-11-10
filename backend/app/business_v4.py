@@ -647,16 +647,18 @@ def register_business_v4(app: FastAPI, db_path: Path):
     @app.post('/api/fichas/{ficha_id}/responsable')
     def set_owner(ficha_id: int, request: Request, payload: OwnerInput):
         user = _not_readonly(request, db_path)
+        # Cualquier vendedor puede tomar, liberar o pasarle una gestión a un compañero (por ejemplo, si está ausente).
         owner = payload.responsable.strip().casefold()
-        if user and user['role'] == 'ventas' and owner not in ('', user['username']):
-            raise HTTPException(403, 'Solo podés asignarte gestiones a vos')
         with connect(db_path) as con:
             row = con.execute('SELECT responsable FROM fichas_consulta WHERE id=?', (ficha_id,)).fetchone()
             if not row:
                 raise HTTPException(404, 'Gestión no encontrada')
-            if user and user['role'] == 'ventas' and owner == '' and row['responsable'] not in ('', user['username']):
-                raise HTTPException(403, 'No podés quitar una gestión asignada a otra persona')
+            if owner and not con.execute('SELECT 1 FROM usuarios WHERE usuario=? AND activo=1', (owner,)).fetchone() and user:
+                raise HTTPException(422, 'Usuario no encontrado')
             con.execute('UPDATE fichas_consulta SET responsable=?, actualizada_en=? WHERE id=?', (owner, stamp(), ficha_id))
+            if user and owner != row['responsable']:
+                from .equipo import notify_assignment
+                notify_assignment(con, ficha_id, owner, user['username'])
             return {'id': ficha_id, 'responsable': owner}
 
     @app.post('/api/fichas/{ficha_id}/no-comercial')
@@ -695,6 +697,9 @@ def register_business_v4(app: FastAPI, db_path: Path):
                 con.execute('''UPDATE bandeja_consultas SET estado='resuelta', leido_en=COALESCE(leido_en,?)
                                WHERE ficha_id=? AND direccion='entrante' AND recibido_el<=?''', (now, msg['ficha_id'], now))
                 con.execute('UPDATE fichas_consulta SET actualizada_en=? WHERE id=?', (now, msg['ficha_id']))
+                # Quien responde una consulta libre queda como responsable (se puede cambiar después).
+                if user:
+                    con.execute("UPDATE fichas_consulta SET responsable=? WHERE id=? AND responsable=''", (user['username'], msg['ficha_id']))
             else:
                 con.execute("UPDATE bandeja_consultas SET estado='resuelta' WHERE id=?", (message_id,))
             opp_id = msg['oportunidad_id']

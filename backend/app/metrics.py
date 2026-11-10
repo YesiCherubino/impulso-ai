@@ -218,10 +218,8 @@ def report_data(con, *, period='mes', canal='todos', responsable='', user=None) 
                                            'ficha_codigo': v['ficha_codigo'],
                                            'conversacion': str(v['conv']) if v['conv'] is not None else ''} for v in vencidos[:20]],
         'gestiones_consideradas': one(f'SELECT COUNT(*) FROM fichas_consulta f WHERE {base}'),
-        'origen_datos': ('Registros actuales de Impulso. Consultas recibidas y cierres usan el período elegido; '
-                         'sin atender, en gestión, vencidos y sin respuesta muestran la situación de hoy. '
-                         'Las gestiones no comerciales o fusionadas no se cuentan. Los mensajes externos no se '
-                         'reciben automáticamente; el tiempo de respuesta se mide con las respuestas registradas en Impulso.'),
+        'origen_datos': ('Recibidas y cierres según el período; pendientes y vencidos, situación actual. '
+                         'No incluye consultas no comerciales.'),
     }
 
 

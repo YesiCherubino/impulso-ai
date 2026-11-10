@@ -13,6 +13,7 @@ from .business_v2 import register_business_v2
 from .business_v3 import init_v3, register_business_v3
 from .escala import register_escala
 from .comercial_v5 import init_v5, register_v5
+from .equipo import init_equipo, register_equipo
 from .business_v4 import (init_v4, register_business_v4, build_case_context, apply_analysis,
                           sync_contact_followup, complete_contact_followup, create_case_for_contact)
 from fastapi import FastAPI, HTTPException, Request, Depends
@@ -41,6 +42,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
         init_v3(db_path)
         init_v4(db_path)
         init_v5(db_path)
+        init_equipo(db_path)
         yield
 
     # Para demos públicas, la clave de acceso es obligatoria y no se expone en Next.js.
@@ -604,6 +606,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
     register_business_v4(app, db_path)
     register_escala(app, db_path)
     register_v5(app, db_path)
+    register_equipo(app, db_path)
     return app
 
 app = create_app()

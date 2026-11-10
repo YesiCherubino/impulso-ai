@@ -26,19 +26,19 @@ export default function QuoteDialog({fichaId,onClose,onSaved}:{fichaId:number;on
   const r=await api<{id:number;numero:string;total:number;moneda:string}>(`/api/fichas/${fichaId}/cotizaciones`,{method:'POST',body:JSON.stringify({moneda,validez_dias:Number(validez)||30,incluye_iva:iva,iva_pct:totals.pct,condiciones,notas,
    items:items.map(i=>({producto_id:i.producto_id,codigo:i.codigo,descripcion:i.descripcion.trim(),unidad:i.unidad||'unidad',cantidad:num(i.cantidad),precio_unitario:num(i.precio_unitario),descuento_pct:num(i.descuento_pct)}))})});
   abrirArchivo(await api<ArchivoB64>(`/api/cotizaciones/${r.id}/pdf`));
-  onSaved?.(`Cotización ${r.numero} generada (${cotizacionTexto(r.total,r.moneda)}). La gestión quedó en “Cotizada”.`);onClose();
+  onSaved?.(`Cotización ${r.numero} generada`);onClose();
  }catch(e){setError(e instanceof Error?e.message:'No se pudo generar la cotización')}finally{setBusy(false)}}
  async function reopen(id:number){try{abrirArchivo(await api<ArchivoB64>(`/api/cotizaciones/${id}/pdf`))}catch(e){setError(String(e))}}
  const mixed=results.length>0&&results.some(r=>r.moneda!==moneda);
  return <div className="modal-backdrop v2-overlay v5-front" onMouseDown={onClose}><div className="modal v6-quote" role="dialog" aria-modal="true" aria-label="Cotizador" onMouseDown={e=>e.stopPropagation()}>
-  <header className="v3-dialog-head"><div><small>{ficha?.codigo}</small><h2><Receipt size={19}/> Nueva cotización</h2><p>{ficha?`${ficha.cliente}${ficha.contacto?` · ${ficha.contacto}`:''}`:'Cargando…'}</p></div><button className="icon-button" onClick={onClose} aria-label="Cerrar"><X/></button></header>
+  <header className="v3-dialog-head"><div><small>{ficha?.codigo}</small><h2>Nueva cotización</h2><p>{ficha?`${ficha.cliente}${ficha.contacto?` · ${ficha.contacto}`:''}`:'Cargando…'}</p></div><button className="icon-button" onClick={onClose} aria-label="Cerrar"><X/></button></header>
   <div className="v3-dialog-body">
    {!!previas.length&&<div className="v6-prev"><small>Cotizaciones anteriores:</small>{previas.map(p=><button key={p.id} type="button" className="v5-chip" onClick={()=>void reopen(p.id)} title="Abrir PDF"><FileDown size={11}/> {p.numero} · {fmt(p.total,p.moneda)}</button>)}</div>}
    <div className="v6-quote-top">
     <label className="search v6-product-search"><Search size={16}/><input placeholder="Buscar en la lista de precios (código, producto o línea)" value={q} onChange={e=>setQ(e.target.value)}/></label>
     <select aria-label="Moneda" value={moneda} onChange={e=>setMoneda(e.target.value as 'ARS'|'USD')}><option value="ARS">Pesos (ARS)</option><option value="USD">Dólares (USD)</option></select>
    </div>
-   {q&&<div className="v6-results">{results.map(p=><button type="button" key={p.id} onClick={()=>add(p)}><span><strong>{p.descripcion}</strong><small>{p.codigo} · {p.linea||'Sin línea'} · {p.unidad}</small></span><b className={p.moneda!==moneda?'is-other':''}>{p.precio!=null?fmt(p.precio,p.moneda):'Sin precio'}</b></button>)}{!results.length&&<p className="muted">No hay productos con “{q}”. Podés escribir la línea a mano.</p>}{mixed&&<small className="muted">Los precios en otra moneda se agregan sin convertir: revisalos.</small>}</div>}
+   {q&&<div className="v6-results">{results.map(p=><button type="button" key={p.id} onClick={()=>add(p)}><span><strong>{p.descripcion}</strong><small>{p.codigo} · {p.linea||'Sin línea'} · {p.unidad}</small></span><b className={p.moneda!==moneda?'is-other':''}>{p.precio!=null?fmt(p.precio,p.moneda):'Sin precio'}</b></button>)}{!results.length&&<p className="muted">Sin resultados para "{q}".</p>}{mixed&&<small className="muted">Los precios en otra moneda no se convierten.</small>}</div>}
    <div className="v5-table-wrap"><table className="v6-items"><thead><tr><th>Descripción</th><th>Cant.</th><th>Precio unit.</th><th>Desc. %</th><th>Importe</th><th></th></tr></thead><tbody>
     {items.map((it,i)=><tr key={i}><td><input aria-label="Descripción" value={it.descripcion} onChange={e=>patch(i,'descripcion',e.target.value)}/>{it.codigo&&<small>{it.codigo}</small>}</td>
      <td><input aria-label="Cantidad" inputMode="decimal" value={it.cantidad} onChange={e=>patch(i,'cantidad',e.target.value)}/></td>
@@ -58,7 +58,7 @@ export default function QuoteDialog({fichaId,onClose,onSaved}:{fichaId:number;on
     <dl className="v6-totals"><div><dt>Subtotal</dt><dd>{fmt(totals.sub,moneda)}</dd></div>{iva&&<div><dt>IVA {totals.pct}%</dt><dd>{fmt(totals.ivaMonto,moneda)}</dd></div>}<div className="is-total"><dt>Total</dt><dd>{fmt(totals.total,moneda)}</dd></div></dl>
    </div>
    {error&&<p className="alert error" role="alert">{error}</p>}
-   <div className="v6-actions"><small className="muted">Se genera el PDF con los datos de {empresa?.razon_social||'la empresa'} y la gestión pasa a “Cotizada” con este total.</small><button type="button" className="btn btn-outline" onClick={onClose}>Cancelar</button><button type="button" className="btn btn-primary" disabled={busy||!valid} onClick={()=>void save()}>{busy?<Loader2 size={16} className="v5-spin"/>:<FileDown size={16}/>} Generar PDF</button></div>
+   <div className="v6-actions"><small className="muted">La gestión pasa a Cotizada con este total.</small><button type="button" className="btn btn-outline" onClick={onClose}>Cancelar</button><button type="button" className="btn btn-primary" disabled={busy||!valid} onClick={()=>void save()}>{busy?<Loader2 size={16} className="v5-spin"/>:<FileDown size={16}/>} Generar PDF</button></div>
   </div>
  </div></div>;
 }

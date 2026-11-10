@@ -54,13 +54,13 @@ def test_mi_dia_and_followup_suggestion(tmp_path, monkeypatch):
         msg = new_case(c, h)
         d = c.get('/api/mi-dia', headers=h).json()
         assert d['resumen']['sin_asignar_sin_responder'] >= 1
-        assert any(x['ficha_id'] == msg['ficha_id'] for x in d['sin_asignar_sin_responder'])
-        # Al asignármela pasa a "Mías sin responder".
+        assert any(x['ficha_id'] == msg['ficha_id'] and x['pendiente'] for x in d['sin_asignar'])
+        # Tomarla (arrastrar a "Asignadas a mí") la mueve de columna.
         assert c.post(f"/api/fichas/{msg['ficha_id']}/responsable", headers=h, json={'responsable': 'admin'}).status_code == 200
         d = c.get('/api/mi-dia', headers=h).json()
-        assert any(x['ficha_id'] == msg['ficha_id'] for x in d['mias_sin_responder'])
-        assert not any(x['ficha_id'] == msg['ficha_id'] for x in d['sin_asignar_sin_responder'])
-        assert d['resumen']['asignadas'] >= 1
+        assert any(x['ficha_id'] == msg['ficha_id'] for x in d['asignadas'])
+        assert not any(x['ficha_id'] == msg['ficha_id'] for x in d['sin_asignar'])
+        assert d['resumen']['asignadas_sin_responder'] >= 1 and d['propio']
         # Se cotiza y se responde; luego pasan 6 días sin respuesta del cliente.
         r = c.post(f"/api/fichas/{msg['ficha_id']}/cotizaciones", headers=h, json={
             'moneda': 'USD', 'items': [{'descripcion': 'Elaboración', 'cantidad': 3000, 'precio_unitario': 0.85}]})
@@ -73,7 +73,7 @@ def test_mi_dia_and_followup_suggestion(tmp_path, monkeypatch):
         d = c.get('/api/mi-dia', headers=h).json()
         sug = [x for x in d['seguimientos_sugeridos'] if x['ficha_id'] == msg['ficha_id']]
         assert sug and sug[0]['dias'] >= 5 and sug[0]['cotizacion']['moneda'] == 'USD'
-        assert not any(x['ficha_id'] == msg['ficha_id'] for x in d['mias_sin_responder'])
+        assert any(x['ficha_id'] == msg['ficha_id'] and not x['pendiente'] for x in d['asignadas'])
         # El borrador de seguimiento le indica a la IA el objetivo.
         calls = []
         c.app.state.analizar_consulta = lambda t: calls.append(t) or ConsultaExtraida(
@@ -184,3 +184,52 @@ def test_templates_search_exports_notes_docs_goals_ai(tmp_path, monkeypatch):
         assert c.post('/api/ia/texto', headers=h, json={'accion': 'traducir_en', 'texto': 'Hola'}).json()['texto'] == 'traducir_en:4'
         r = c.post('/api/ia/texto', headers=h, json={'accion': 'resumir', 'conversacion': key})
         assert r.status_code == 200 and r.json()['texto'].startswith('resumir:')
+
+
+def test_reply_assigns_free_case_and_team_chat(tmp_path, monkeypatch):
+    path = setup(tmp_path, monkeypatch)
+    with TestClient(create_app(path)) as c:
+        h = login(c)
+        for u in ('lucia', 'martin'):
+            r = c.post('/api/admin/users', headers=h, json={'username': u, 'name': u.title(), 'password': 'clave-de-prueba-larga', 'role': 'ventas'})
+            assert r.status_code in (200, 201), r.text
+        hl = {'X-Session-Token': c.post('/api/auth/login', json={'username': 'lucia', 'password': 'clave-de-prueba-larga'}).json()['token']}
+        hm = {'X-Session-Token': c.post('/api/auth/login', json={'username': 'martin', 'password': 'clave-de-prueba-larga'}).json()['token']}
+        msg = new_case(c, h)
+        # Lucía responde una consulta libre: queda asignada a ella.
+        assert c.post(f"/api/inbox/{msg['id']}/reply", headers=hl, json={'texto': 'Hola', 'canal': 'Correo'}).status_code == 201
+        assert c.get(f"/api/fichas/{msg['ficha_id']}", headers=h).json()['responsable'] == 'lucia'
+        # Martín responde por ella (está ausente): no cambia el responsable.
+        assert c.post(f"/api/inbox/{msg['id']}/reply", headers=hm, json={'texto': 'Sigo yo', 'canal': 'Correo'}).status_code == 201
+        assert c.get(f"/api/fichas/{msg['ficha_id']}", headers=h).json()['responsable'] == 'lucia'
+        # Un vendedor puede pasársela a otro; el nuevo responsable recibe un mensaje directo.
+        base = c.get('/api/chat/resumen', headers=hm).json()
+        assert c.post(f"/api/fichas/{msg['ficha_id']}/responsable", headers=hl, json={'responsable': 'martin'}).status_code == 200
+        r = c.get(f"/api/chat/resumen?desde_id={base['ultimo_id']}", headers=hm).json()
+        assert r['no_leidos'] == 1 and r['nuevos'][0]['directo'] and 'CON-' in r['nuevos'][0]['texto']
+        # Canal #ventas, mención y enlace a la gestión por código.
+        ventas = next(x for x in r['canales'] if x['tipo'] == 'canal')
+        code = c.get(f"/api/fichas/{msg['ficha_id']}", headers=h).json()['codigo']
+        sent = c.post(f"/api/chat/canales/{ventas['id']}/mensajes", headers=hl, json={'texto': f'@martin mirá {code}'}).json()
+        assert sent['gestion']['codigo'] == code
+        r2 = c.get(f"/api/chat/resumen?desde_id={r['ultimo_id']}", headers=hm).json()
+        assert r2['nuevos'][0]['mencion']
+        hist = c.get(f"/api/chat/canales/{ventas['id']}/mensajes", headers=hm).json()['mensajes']
+        assert hist[-1]['texto'].startswith('@martin')
+        c.post(f"/api/chat/canales/{ventas['id']}/leido", headers=hm, json={'ultimo_id': hist[-1]['id']})
+        # Estado y equipo.
+        assert c.post('/api/chat/estado', headers=hl, json={'estado': 'ausente', 'mensaje': 'En reunión'}).status_code == 200
+        equipo = {u['usuario']: u for u in c.get('/api/chat/resumen', headers=hm).json()['equipo']}
+        assert equipo['lucia']['estado'] == 'ausente' and equipo['martin']['estado'] == 'activo'
+        # Mensajes directos privados.
+        dm = c.post('/api/chat/directo', headers=hl, json={'usuario': 'martin'}).json()['id']
+        assert c.get(f'/api/chat/canales/{dm}/mensajes', headers=h).status_code == 403
+        # Retención: los mensajes viejos se borran.
+        with connect(path) as con:
+            con.execute("UPDATE chat_mensajes SET creado_en='2020-01-01T00:00:00+00:00'")
+        assert c.post('/api/chat/retencion', headers=h, json={'dias': 90}).json()['dias'] == 90
+        assert c.get(f"/api/chat/canales/{ventas['id']}/mensajes", headers=hm).json()['mensajes'] == []
+        # Administración ve el tablero de otro vendedor.
+        d = c.get('/api/mi-dia?usuario=martin', headers=h).json()
+        assert d['usuario'] == 'martin' and not d['propio'] and any(x['ficha_id'] == msg['ficha_id'] for x in d['asignadas'])
+        assert c.get('/api/mi-dia?usuario=martin', headers=hl).json()['usuario'] == 'lucia'

@@ -299,7 +299,9 @@ def test_owner_and_non_commercial(tmp_path, monkeypatch):
         m = c.post('/api/inbox/new', headers=admin, json={'cliente': 'Envases SA', 'contacto': 'Diego', 'canal': 'Correo',
                    'email_remitente': 'd@envases.test', 'texto': 'Somos proveedores de envases y queremos presentarnos.'}).json()
         fid = m['ficha_id']
-        assert c.post(f'/api/fichas/{fid}/responsable', headers=flor, json={'responsable': 'admin'}).status_code == 403
+        # Un vendedor puede pasarle la gestión a un compañero (V5) pero no a un usuario inexistente.
+        assert c.post(f'/api/fichas/{fid}/responsable', headers=flor, json={'responsable': 'admin'}).status_code == 200
+        assert c.post(f'/api/fichas/{fid}/responsable', headers=flor, json={'responsable': 'nadie'}).status_code == 422
         assert c.post(f'/api/fichas/{fid}/responsable', headers=flor, json={'responsable': 'flor'}).json()['responsable'] == 'flor'
         assert {u['username'] for u in c.get('/api/users/responsables', headers=flor).json()} == {'admin', 'flor'}
         report = c.get('/api/reports/summary?period=todos', headers=flor).json()

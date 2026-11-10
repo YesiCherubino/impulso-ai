@@ -82,15 +82,13 @@ export type Documento=Adjunto&{descripcion:string;subido_por:string;creado_en:st
 export type Plantilla={id:number;atajo:string;titulo:string;texto:string;activa:number};
 export type Producto={id:number;codigo:string;descripcion:string;unidad:string;linea:string;precio:number|null;moneda:'ARS'|'USD';origen:string};
 export type NotaInterna={id:number;ficha_id:number;usuario:string;texto:string;area:string;creada_en:string};
-export type Empresa={razon_social:string;domicilio:string;telefono:string;email:string;web:string;cuit:string;condiciones:string;iva_pct:number;dias_seguimiento:number;probabilidades:Record<string,number>;areas?:string[]};
+export type Empresa={razon_social:string;domicilio:string;telefono:string;email:string;web:string;cuit:string;condiciones:string;iva_pct:number;dias_seguimiento:number;probabilidades:Record<string,number>;areas?:string[];color_acento?:string};
 export type ItemMiDia={ficha_id:number;codigo:string;cliente:string;titulo?:string;conversacion:string};
 export type ActividadMiDia={id:number;titulo:string;tipo:string;inicio:string;fin:string|null;cliente:string;ficha_id:number|null;oportunidad_id:number|null;responsable:string;notas:string;ficha_codigo:string|null;conversacion:string};
-export type PendienteMiDia=ItemMiDia&{horas:number;responsable:string;bajo_minimo:boolean};
-export type MiDia={usuario:string;fecha:string;dias_seguimiento:number;
- resumen:{asignadas:number;mias_sin_responder:number;sin_asignar_sin_responder:number;otros_sin_responder:number;sin_responder:number;actividades_hoy:number;vencidas:number;cotizaciones_por_vencer:number;nuevas_hoy:number;sin_asignar:number};
- mias_sin_responder:PendienteMiDia[];sin_asignar_sin_responder:PendienteMiDia[];
- actividades_hoy:ActividadMiDia[];actividades_vencidas:ActividadMiDia[];
- cotizaciones_por_vencer:(ItemMiDia&{vence:string;vencida:boolean;monto:number|null;moneda:string})[];
+export type TarjetaMiDia={ficha_id:number;codigo:string;cliente:string;contacto:string;titulo:string;estado_gestion:string;tipo_consulta:TipoConsulta;cantidad:number|null;responsable:string;pendiente:boolean;horas:number;ultimo_mensaje_en:string|null;canal:string;bajo_minimo:boolean;conversacion:string};
+export type MiDia={usuario:string;propio:boolean;fecha:string;dias_seguimiento:number;usuarios:{usuario:string;nombre:string}[];
+ resumen:{asignadas:number;asignadas_sin_responder:number;sin_asignar:number;sin_asignar_sin_responder:number;actividades_hoy:number;vencidas:number};
+ asignadas:TarjetaMiDia[];sin_asignar:TarjetaMiDia[];actividades_hoy:ActividadMiDia[];actividades_vencidas:ActividadMiDia[];
  seguimientos_sugeridos:(ItemMiDia&{dias:number;cotizacion:{monto:number|null;moneda:string};mensaje_id:number|null})[]};
 /* Variables de las respuestas rápidas. */
 export function completarPlantilla(texto:string,v:Record<string,string>){return texto.replace(/\{(\w+)\}/g,(m,k)=>v[k]!==undefined&&v[k]!==''?v[k]:m)}

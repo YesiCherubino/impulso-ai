@@ -27,6 +27,6 @@ export default function GoalsReport({user}:{user:UsuarioSesion|null}){
   {d&&<div className="v5-report-block is-wide"><h3><TrendingUp size={17}/> Pronóstico del pipeline abierto</h3>
    <div className="v6-forecast">{Object.entries(d.pronostico).filter(([,v])=>v>0).map(([m,v])=><div key={m}><small>Ponderado {m}</small><strong>{cotizacionTexto(Math.round(v),m)}</strong></div>)}{!Object.values(d.pronostico).some(v=>v>0)&&<p className="muted">No hay gestiones abiertas con monto cotizado.</p>}</div>
    {!!d.pronostico_detalle.length&&<div className="v5-table-wrap"><table className="v5-mini-table"><thead><tr><th>Etapa</th><th>Cotizado</th><th>Probabilidad</th><th>Ponderado</th></tr></thead><tbody>{d.pronostico_detalle.map(x=><tr key={x.estado+x.moneda}><td>{estadoGestionNombre[x.estado]}</td><td>{cotizacionTexto(x.monto,x.moneda)}</td><td>{x.probabilidad}%</td><td>{cotizacionTexto(Math.round(x.monto*x.probabilidad/100),x.moneda)}</td></tr>)}</tbody></table></div>}
-   <small className="muted">{d.nota}</small></div>}
+   </div>}
  </section>;
 }

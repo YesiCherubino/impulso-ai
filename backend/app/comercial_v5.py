@@ -151,6 +151,8 @@ def init_v5(db_path: Path) -> None:
                                             'lista_precios': "TEXT NOT NULL DEFAULT ''", 'es_cliente': 'INTEGER NOT NULL DEFAULT 0',
                                             'importado_en': 'TEXT'})
         _add_columns(con, 'fichas_consulta', {'derivada_a': "TEXT NOT NULL DEFAULT ''"})
+        # Color de acento del cliente (Impulso mantiene su identidad; cada empresa elige su color).
+        _add_columns(con, 'empresa_config', {'color_acento': "TEXT NOT NULL DEFAULT '#2e6a57'"})
         _add_columns(con, 'bandeja_consultas', {'adjuntos_json': "TEXT NOT NULL DEFAULT '[]'"})
         con.execute('CREATE INDEX IF NOT EXISTS idx_oportunidades_codigo ON oportunidades(codigo_tango)')
         # Lista de precios de ejemplo para que el cotizador funcione desde el primer uso (se reemplaza al importar).
@@ -213,46 +215,43 @@ def followups_due(con, owner_clause: str, args: list, days: int) -> list[dict]:
     return out
 
 
-def pending_item(r, lote) -> dict:
-    return {'ficha_id': r['id'], 'codigo': r['codigo'], 'cliente': r['cliente'], 'titulo': r['titulo'],
-            'horas': response_from_row(r)['horas'], 'responsable': r['responsable'],
+def board_item(r, lote) -> dict:
+    resp = response_from_row(r)
+    return {'ficha_id': r['id'], 'codigo': r['codigo'], 'cliente': r['cliente'], 'contacto': r['contacto'], 'titulo': r['titulo'],
+            'estado_gestion': r['estado_gestion'], 'tipo_consulta': r['tipo_consulta'], 'cantidad': r['cantidad'],
+            'responsable': r['responsable'], 'pendiente': resp['pendiente'], 'horas': resp['horas'],
+            'ultimo_mensaje_en': r['ultimo_mensaje_en'], 'canal': r['canal_origen'],
             'bajo_minimo': r['tipo_consulta'] in TIPOS_CON_LOTE_MINIMO and r['cantidad'] is not None and r['cantidad'] < lote,
             'conversacion': str(conv_key(r))}
 
 
-def my_day(con, user) -> dict:
-    username = user['username'] if user else ''
+def my_day(con, user, usuario: str = '') -> dict:
+    """Tablero personal: asignadas al usuario y sin asignar, más seguimientos y actividades del día.
+    Administración y gerencia pueden ver el tablero de otro vendedor."""
+    me = user['username'] if user else ''
     role = user['role'] if user else 'administrador'
-    # Ventas ve lo propio y lo sin asignar; administración y gerencia, todo.
-    if role == 'ventas':
-        owner, args = "AND (f.responsable=? OR f.responsable='')", [username]
-        act_owner, act_args = 'AND a.responsable=?', [username]
-    else:
-        owner, args, act_owner, act_args = '', [], '', []
-    cfg = empresa(con)
+    target = usuario if usuario and role in ('administrador', 'gerencia') else me
     lote = lote_minimo(con)
-    # Primero lo asignado al usuario; después lo que nadie tomó todavía.
-    pend = f"f.estado_gestion IN {OPEN_SQL} AND f.pendiente_desde IS NOT NULL"
-    def pending(cond, cargs, limit=12):
-        rows = con.execute(page_sql(f'SELECT f.* FROM fichas_consulta f WHERE {pend} AND {cond} ORDER BY f.pendiente_desde', limit, 0), cargs).fetchall()
-        total = con.execute(f'SELECT COUNT(*) FROM fichas_consulta f WHERE {pend} AND {cond}', cargs).fetchone()[0]
-        return rows, total
-    mias, total_mias = pending('f.responsable=?', [username])
-    libres, total_libres = pending("f.responsable=''", [])
-    # Administración y gerencia también ven cuántas tienen pendientes los demás vendedores.
-    otros = 0 if role == 'ventas' else con.execute(
-        f"SELECT COUNT(*) FROM fichas_consulta f WHERE {pend} AND f.responsable<>'' AND f.responsable<>?", [username]).fetchone()[0]
-    asignadas = con.execute(f'SELECT COUNT(*) FROM fichas_consulta f WHERE f.estado_gestion IN {OPEN_SQL} AND f.responsable=?',
-                            [username]).fetchone()[0]
-    now = datetime.now(timezone.utc)
+    cfg = empresa(con)
+    pend_first = 'ORDER BY CASE WHEN f.pendiente_desde IS NULL THEN 1 ELSE 0 END, f.pendiente_desde, f.ultimo_mensaje_en DESC'
+
+    def column(cond, args):
+        rows = con.execute(page_sql(f'SELECT f.* FROM fichas_consulta f WHERE f.estado_gestion IN {OPEN_SQL} AND {cond} {pend_first}', 150, 0),
+                           args).fetchall()
+        counts = con.execute(f'''SELECT COUNT(*) AS n, SUM(CASE WHEN f.pendiente_desde IS NOT NULL THEN 1 ELSE 0 END) AS p
+                                FROM fichas_consulta f WHERE f.estado_gestion IN {OPEN_SQL} AND {cond}''', args).fetchone()
+        return [board_item(r, lote) for r in rows], counts['n'], counts['p'] or 0
+
+    mias, n_mias, p_mias = column('f.responsable=?', [target])
+    libres, n_libres, p_libres = column("f.responsable=''", [])
     start = datetime.combine(date.today(), datetime.min.time(), tzinfo=timezone.utc) - timedelta(hours=3)
     end = start + timedelta(days=1)
-    acts = con.execute(f'''SELECT a.*, f.codigo AS ficha_codigo, COALESCE(o.cliente,f.cliente,'') AS cliente,
+    acts = con.execute('''SELECT a.*, f.codigo AS ficha_codigo, COALESCE(o.cliente,f.cliente,'') AS cliente,
                CASE WHEN f.oportunidad_id IS NOT NULL THEN f.oportunidad_id ELSE -f.id END AS conv
                FROM actividades_comerciales a LEFT JOIN fichas_consulta f ON f.id=a.ficha_id
                LEFT JOIN oportunidades o ON o.id=a.oportunidad_id
-               WHERE a.estado='programada' AND a.inicio<? {act_owner} ORDER BY a.inicio''',
-                       [end.isoformat(), *act_args]).fetchall()
+               WHERE a.estado='programada' AND a.inicio<? AND a.responsable=? ORDER BY a.inicio''',
+                       [end.isoformat(), target]).fetchall()
     hoy, vencidas = [], []
     for a in acts:
         t = parse_dt(a['inicio'])
@@ -262,29 +261,17 @@ def my_day(con, user) -> dict:
                 'ficha_id': a['ficha_id'], 'oportunidad_id': a['oportunidad_id'], 'responsable': a['responsable'], 'notas': a['notas'],
                 'ficha_codigo': a['ficha_codigo'], 'conversacion': str(a['conv']) if a['conv'] is not None else ''}
         (hoy if t >= start else vencidas).append(item)
-    quotes = con.execute(f'''SELECT f.* FROM fichas_consulta f WHERE f.estado_gestion IN ('cotizada','muestra_piloto')
-               AND f.cotizacion_fecha IS NOT NULL {owner}''', args).fetchall()
-    por_vencer = []
-    for q in quotes:
-        exp = quote_expiry(q)
-        if exp and exp <= date.today() + timedelta(days=7):
-            por_vencer.append({'ficha_id': q['id'], 'codigo': q['codigo'], 'cliente': q['cliente'], 'vence': exp.isoformat(),
-                               'vencida': exp < date.today(), 'monto': q['cotizacion_monto'], 'moneda': q['cotizacion_moneda'],
-                               'conversacion': str(conv_key(q))})
-    por_vencer.sort(key=lambda x: x['vence'])
-    nuevas_hoy = con.execute(f'''SELECT COUNT(*) FROM fichas_consulta f WHERE f.estado_gestion<>'fusionada'
-               AND f.creada_en>=? {owner}''', [start.isoformat(), *args]).fetchone()[0]
-    sin_asignar = con.execute(f"SELECT COUNT(*) FROM fichas_consulta f WHERE f.estado_gestion IN {OPEN_SQL} AND f.responsable=''").fetchone()[0]
+    usuarios = []
+    if role in ('administrador', 'gerencia'):
+        usuarios = [{'usuario': r['usuario'], 'nombre': r['nombre']} for r in con.execute(
+            "SELECT usuario, nombre FROM usuarios WHERE activo=1 AND rol IN ('ventas','administrador') ORDER BY nombre")]
     return {
-        'usuario': username, 'fecha': date.today().isoformat(),
-        'resumen': {'asignadas': asignadas, 'mias_sin_responder': total_mias, 'sin_asignar_sin_responder': total_libres,
-                    'otros_sin_responder': otros, 'sin_responder': total_mias + total_libres + otros, 'actividades_hoy': len(hoy), 'vencidas': len(vencidas),
-                    'cotizaciones_por_vencer': len(por_vencer), 'nuevas_hoy': nuevas_hoy, 'sin_asignar': sin_asignar},
-        'mias_sin_responder': [pending_item(r, lote) for r in mias],
-        'sin_asignar_sin_responder': [pending_item(r, lote) for r in libres],
+        'usuario': target, 'propio': target == me, 'fecha': date.today().isoformat(), 'usuarios': usuarios,
+        'resumen': {'asignadas': n_mias, 'asignadas_sin_responder': p_mias, 'sin_asignar': n_libres, 'sin_asignar_sin_responder': p_libres,
+                    'actividades_hoy': len(hoy), 'vencidas': len(vencidas)},
+        'asignadas': mias, 'sin_asignar': libres,
         'actividades_hoy': hoy, 'actividades_vencidas': vencidas[:15],
-        'cotizaciones_por_vencer': por_vencer[:15],
-        'seguimientos_sugeridos': followups_due(con, owner, args, int(cfg['dias_seguimiento']))[:15],
+        'seguimientos_sugeridos': followups_due(con, 'AND f.responsable=?', [target], int(cfg['dias_seguimiento']))[:15],
         'dias_seguimiento': int(cfg['dias_seguimiento']),
     }
 
@@ -641,6 +628,7 @@ class EmpresaInput(BaseModel):
     iva_pct: float = Field(default=21, ge=0, le=50)
     dias_seguimiento: int = Field(default=5, ge=1, le=60)
     probabilidades: dict[str, int] = Field(default_factory=lambda: dict(PROB_DEFAULT))
+    color_acento: str = Field(default='#2e6a57', pattern=r'^#[0-9a-fA-F]{6}$')
 
 
 class PlantillaInput(BaseModel):
@@ -689,10 +677,10 @@ def _not_readonly(request, db_path):
 def register_v5(app: FastAPI, db_path: Path):
     # --------------------------------------------------------------- Mi día
     @app.get('/api/mi-dia')
-    def mi_dia(request: Request):
+    def mi_dia(request: Request, usuario: str = ''):
         user = current(request, db_path)
         with connect(db_path) as con:
-            return my_day(con, user)
+            return my_day(con, user, usuario.strip())
 
     # --------------------------------------------------------------- Empresa / reglas
     @app.get('/api/empresa')
@@ -707,9 +695,9 @@ def register_v5(app: FastAPI, db_path: Path):
         probs = {k: max(0, min(100, int(payload.probabilidades.get(k, v)))) for k, v in PROB_DEFAULT.items()}
         with connect(db_path) as con:
             con.execute('''UPDATE empresa_config SET razon_social=?,domicilio=?,telefono=?,email=?,web=?,cuit=?,condiciones=?,iva_pct=?,
-                           dias_seguimiento=?,probabilidades_json=? WHERE id=1''',
+                           dias_seguimiento=?,probabilidades_json=?,color_acento=? WHERE id=1''',
                         (payload.razon_social, payload.domicilio, payload.telefono, payload.email, payload.web, payload.cuit,
-                         payload.condiciones, payload.iva_pct, payload.dias_seguimiento, json.dumps(probs)))
+                         payload.condiciones, payload.iva_pct, payload.dias_seguimiento, json.dumps(probs), payload.color_acento.lower()))
             return empresa(con)
 
     # --------------------------------------------------------------- Importación
@@ -1027,8 +1015,7 @@ def register_v5(app: FastAPI, db_path: Path):
                     forecast[r['m']] = round(forecast[r['m']] + r['t'] * probs.get(r['e'], 0) / 100, 2)
                     detail.append({'estado': r['e'], 'moneda': r['m'], 'monto': round(r['t'], 2), 'probabilidad': probs.get(r['e'], 0)})
             return {'mes': mes, 'vendedores': out, 'pronostico': forecast, 'pronostico_detalle': detail, 'probabilidades': probs,
-                    'nota': 'El pronóstico pondera el monto cotizado de cada gestión abierta por la probabilidad de su etapa '
-                            '(configurable en Administración). No es una predicción de IA.'}
+                    'nota': 'Monto cotizado de cada gestión abierta por la probabilidad de su etapa.'}
 
     @app.post('/api/metas')
     def save_goal(request: Request, payload: MetaInput):
