@@ -42,7 +42,7 @@ export type SeguimientoIA = {motivo:string;asunto:string;mensaje:string;consider
 export type Rol='ventas'|'administrador'|'gerencia';
 export const roleName:Record<Rol,string>={ventas:'Ventas',administrador:'Administrador',gerencia:'Gerencia'};
 export type Permiso='ver_todas'|'responder'|'gestionar'|'asignar'|'contactos'|'reportes_todos'|'reporte_ia'|'exportar'|'chat'|'tablero_otros';
-export type UsuarioSesion={id:number;username:string;name:string;role:Rol;theme:'claro'|'oscuro';permisos?:Partial<Record<Permiso,boolean>>;rol_real?:Rol;viendo_como?:Rol};
+export type UsuarioSesion={id:number;username:string;name:string;role:Rol;theme:'claro'|'oscuro'|'auto';permisos?:Partial<Record<Permiso,boolean>>;rol_real?:Rol;viendo_como?:Rol};
 /* Sin inicio de sesión (demo local) todo está permitido. */
 export const puede=(u:UsuarioSesion|null|undefined,p:Permiso)=>!u||!u.permisos||!!u.permisos[p];
 export type ConsultaBandeja = {id:number;cliente:string;contacto:string;canal:string;texto:string;recibido_el:string;estado:'nueva'|'en_gestion'|'resuelta';oportunidad_id:number|null;ficha_id:number|null;leido_en:string|null;email_remitente:string;telefono_remitente:string;asunto:string;direccion?:'entrante'|'saliente';usuario?:string;adjuntos?:Adjunto[]};
@@ -56,7 +56,7 @@ export const esCerrada=(estado?:string)=>!ESTADOS_ABIERTOS.includes((estado||'si
 export const MOTIVOS_NO_CONCRETADA=['Precio','Volumen bajo el mínimo','Plazo','Sin respuesta del cliente','Eligió otro proveedor','Otro'];
 export type Respuesta={pendiente:boolean;horas:number;desde:string|null};
 export type FichaConsulta = {id:number;codigo:string;oportunidad_id:number|null;titulo:string;cliente:string;contacto:string;producto:string;cantidad:number|null;tipo_consulta:TipoConsulta;presentacion:string;packaging:string;requisitos:string[];datos_faltantes:string[];resumen:string;creada_en:string;actualizada_en:string;mensajes?:ConsultaBandeja[];mensajes_count?:number;estado_gestion?:string;cerrada_en?:string|null;motivo_cierre?:string;
- formula?:'propia'|'desarrollo_pasmanter'|'sin_especificar';marca_registrada?:'si'|'no'|'sin_especificar';registro_anmat?:'si'|'no'|'en_tramite'|'sin_especificar';destino?:''|'local'|'exportacion';pais_destino?:string;plazo_deseado?:string;localidad?:string;responsable?:string;
+ formula?:'propia'|'desarrollo_empresa'|'sin_especificar';marca_registrada?:'si'|'no'|'sin_especificar';registro_anmat?:'si'|'no'|'en_tramite'|'sin_especificar';destino?:''|'local'|'exportacion';pais_destino?:string;plazo_deseado?:string;localidad?:string;responsable?:string;
  cotizacion_monto?:number|null;cotizacion_moneda?:''|'ARS'|'USD';cotizacion_fecha?:string|null;cotizacion_validez_dias?:number|null;tipo_sugerido_ia?:number;
  bajo_minimo?:boolean;lote_minimo?:number;rubro?:string;envase?:string;tipo_cliente?:string;etapas?:string[];datos_a_confirmar?:string[];campos_editados?:string[];canal_origen?:string;respuesta?:Respuesta;duplicados?:Duplicado[];derivada_a?:string};
 export type Duplicado={id:number;codigo:string;titulo:string;cliente:string;producto:string;estado_gestion:string;oportunidad_id:number|null;mensajes:number};

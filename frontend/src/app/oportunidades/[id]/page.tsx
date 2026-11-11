@@ -36,7 +36,7 @@ export default function DetailPage(){
  const completedCases=fichas.length-activeCases.length;
  return <Shell>
   <div className="v4-contact-page">
-   <Link href={fichas.length&&!activeCases.length?'/finalizados':'/'} className="v4-back-link"><ArrowLeft size={16}/> Volver a fichas</Link>
+   <Link href={fichas.length&&!activeCases.length?'/finalizados':'/contactos'} className="v4-back-link"><ArrowLeft size={16}/> Volver a fichas</Link>
    {loading&&<div className="panel empty">Cargando ficha...</div>}{error&&<p className="alert error" role="alert">{error}</p>}
    {data&&<>
     <header className="v4-contact-header">

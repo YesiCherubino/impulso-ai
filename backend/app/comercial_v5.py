@@ -32,7 +32,7 @@ MAX_IMPORT_BYTES = 10 * 1024 * 1024
 
 PLANTILLAS_INICIALES = [
     ('datos', 'Pedir datos para cotizar',
-     'Hola {contacto}, gracias por contactarte con Roberto Pasmanter. Para preparar la cotización de {producto} necesitamos: '
+     'Hola {contacto}, gracias por contactarte con Empresa S.A. Para preparar la cotización de {producto} necesitamos: '
      'cantidad estimada, presentación (ml/g) y tipo de envase, si cuentan con fórmula propia o prefieren nuestro desarrollo, '
      'y el plazo en que lo necesitan.'),
     ('anmat', 'Requisitos ANMAT',
@@ -63,18 +63,18 @@ PLANTILLAS_INICIALES = [
      'También podemos encargarnos del diseño de etiquetas y del acondicionamiento final. Si ya tenés el diseño, pasanos el archivo '
      'y la medida del envase; si no, lo armamos con vos.'),
     ('gracias', 'Cierre cordial',
-     'Muchas gracias, {contacto}. Quedamos atentos a tu respuesta. Saludos, {vendedor} – Roberto Pasmanter S.A.'),
+     'Muchas gracias, {contacto}. Quedamos atentos a tu respuesta. Saludos, {vendedor} – Empresa S.A.'),
 ]
 
 PRODUCTOS_EJEMPLO = [
-    ('DG-CC250', 'Dermogreen Crema corporal 250 ml', 'unidad', 'Dermogreen', 2850, 'ARS'),
-    ('DG-CF50', 'Dermogreen Crema facial 50 ml', 'unidad', 'Dermogreen', 3900, 'ARS'),
-    ('DG-SH350', 'Dermogreen Shampoo 350 ml', 'unidad', 'Dermogreen', 2400, 'ARS'),
-    ('DG-AC350', 'Dermogreen Acondicionador 350 ml', 'unidad', 'Dermogreen', 2450, 'ARS'),
-    ('AF-EDT100', 'Acqua Di Fiore Eau de toilette 100 ml', 'unidad', 'Acqua Di Fiore', 6900, 'ARS'),
-    ('AF-BS200', 'Acqua Di Fiore Body splash 200 ml', 'unidad', 'Acqua Di Fiore', 3300, 'ARS'),
-    ('TG-JL500', 'Tango Jabón líquido 500 ml', 'unidad', 'Tango', 1650, 'ARS'),
-    ('TG-AG250', 'Tango Alcohol en gel 250 ml', 'unidad', 'Tango', 1200, 'ARS'),
+    ('MA-CC250', 'Marca A Crema corporal 250 ml', 'unidad', 'Marca A', 2850, 'ARS'),
+    ('MA-CF50', 'Marca A Crema facial 50 ml', 'unidad', 'Marca A', 3900, 'ARS'),
+    ('MA-SH350', 'Marca A Shampoo 350 ml', 'unidad', 'Marca A', 2400, 'ARS'),
+    ('MA-AC350', 'Marca A Acondicionador 350 ml', 'unidad', 'Marca A', 2450, 'ARS'),
+    ('MB-EDT100', 'Marca B Eau de toilette 100 ml', 'unidad', 'Marca B', 6900, 'ARS'),
+    ('MB-BS200', 'Marca B Body splash 200 ml', 'unidad', 'Marca B', 3300, 'ARS'),
+    ('MC-JL500', 'Marca C Jabón líquido 500 ml', 'unidad', 'Marca C', 1650, 'ARS'),
+    ('MC-AG250', 'Marca C Alcohol en gel 250 ml', 'unidad', 'Marca C', 1200, 'ARS'),
     ('SV-DESA', 'Desarrollo de fórmula (por proyecto)', 'proyecto', 'Servicios', 1800, 'USD'),
     ('SV-PILOTO', 'Lote piloto y muestras', 'lote', 'Servicios', 450, 'USD'),
     ('SV-ELAB', 'Elaboración y envasado (por unidad)', 'unidad', 'Servicios', 0.85, 'USD'),
@@ -138,9 +138,9 @@ def init_v5(db_path: Path) -> None:
           cantidad REAL NOT NULL, precio_unitario REAL NOT NULL, descuento_pct REAL NOT NULL DEFAULT 0, importe REAL NOT NULL);
         CREATE INDEX IF NOT EXISTS idx_cotizaciones_ficha ON cotizaciones(ficha_id);
         CREATE TABLE IF NOT EXISTS empresa_config (
-          id INTEGER PRIMARY KEY CHECK(id=1), razon_social TEXT NOT NULL DEFAULT 'Roberto Pasmanter S.A.',
-          domicilio TEXT NOT NULL DEFAULT '', telefono TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT 'ventas@pasmanter.com.ar',
-          web TEXT NOT NULL DEFAULT 'www.pasmanter.com.ar', cuit TEXT NOT NULL DEFAULT '',
+          id INTEGER PRIMARY KEY CHECK(id=1), razon_social TEXT NOT NULL DEFAULT 'Empresa S.A.',
+          domicilio TEXT NOT NULL DEFAULT '', telefono TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT 'ventas@empresa.com.ar',
+          web TEXT NOT NULL DEFAULT 'www.empresa.com.ar', cuit TEXT NOT NULL DEFAULT '',
           condiciones TEXT NOT NULL DEFAULT 'Precios sujetos a confirmación de disponibilidad. Forma de pago y plazo de entrega a convenir.',
           iva_pct REAL NOT NULL DEFAULT 21, dias_seguimiento INTEGER NOT NULL DEFAULT 5,
           probabilidades_json TEXT NOT NULL DEFAULT '{"sin_atender":5,"calificada":15,"cotizada":35,"muestra_piloto":60}');
@@ -172,7 +172,7 @@ def init_v5(db_path: Path) -> None:
         _add_columns(con, 'empresa_config', {'color_acento': "TEXT NOT NULL DEFAULT '#2e6a57'"})
         _add_columns(con, 'bandeja_consultas', {'adjuntos_json': "TEXT NOT NULL DEFAULT '[]'"})
         con.execute('CREATE INDEX IF NOT EXISTS idx_oportunidades_codigo ON oportunidades(codigo_tango)')
-        # Tono de Pasmanter: voseo. Se aplica una sola vez si nadie cambió la configuración de la IA.
+        # Tono por defecto: voseo. Se aplica una sola vez si nadie cambió la configuración de la IA.
         con.execute('CREATE TABLE IF NOT EXISTS migraciones (clave TEXT PRIMARY KEY)')
         if not con.execute("SELECT 1 FROM migraciones WHERE clave='ia_voseo'").fetchone():
             con.execute("UPDATE ia_configuracion SET tratamiento='vos' WHERE id=1 AND tratamiento='ustedes' AND instrucciones=''")
@@ -192,6 +192,48 @@ def init_v5(db_path: Path) -> None:
             if not con.execute('SELECT 1 FROM plantillas_semilla WHERE atajo=?', (a,)).fetchone():
                 con.execute('INSERT OR IGNORE INTO plantillas(atajo,titulo,texto,actualizada_en) VALUES (?,?,?,?)', (a, t, x, stamp()))
                 con.execute('INSERT INTO plantillas_semilla(atajo) VALUES (?)', (a,))
+        neutralizar_marca(con)
+
+
+# Antes los ejemplos usaban el nombre y las marcas de un cliente real; ahora son genéricos.
+MARCAS_REEMPLAZO = (('Roberto Pasmanter S.A.', 'Empresa S.A.'), ('Roberto Pasmanter', 'Empresa S.A.'),
+                    ('formulario de Pasmanter', 'formulario web'), ('Pasmanter', 'Empresa S.A.'),
+                    ('Dermogreen', 'Marca A'), ('Acqua Di Fiore', 'Marca B'))
+CODIGOS_REEMPLAZO = {'DG-CC250': 'MA-CC250', 'DG-CF50': 'MA-CF50', 'DG-SH350': 'MA-SH350', 'DG-AC350': 'MA-AC350',
+                     'AF-EDT100': 'MB-EDT100', 'AF-BS200': 'MB-BS200', 'TG-JL500': 'MC-JL500', 'TG-AG250': 'MC-AG250'}
+
+
+def neutralizar_marca(con) -> None:
+    """Una sola vez: reemplaza el nombre y las marcas del cliente en los datos de ejemplo ya cargados."""
+    if con.execute("SELECT 1 FROM migraciones WHERE clave='sin_marca_cliente'").fetchone():
+        return
+    con.execute('''UPDATE empresa_config SET
+        razon_social=CASE WHEN razon_social='Roberto Pasmanter S.A.' THEN 'Empresa S.A.' ELSE razon_social END,
+        email=CASE WHEN email='ventas@pasmanter.com.ar' THEN 'ventas@empresa.com.ar' ELSE email END,
+        web=CASE WHEN web='www.pasmanter.com.ar' THEN 'www.empresa.com.ar' ELSE web END WHERE id=1''')
+    nuevos = {c: (d, u, l, p, m) for c, d, u, l, p, m in PRODUCTOS_EJEMPLO}
+    for old, new in CODIGOS_REEMPLAZO.items():
+        row = con.execute("SELECT id FROM productos WHERE codigo=? AND origen='ejemplo'", (old,)).fetchone()
+        if not row:
+            continue
+        dest = con.execute('SELECT id FROM productos WHERE codigo=?', (new,)).fetchone()
+        if dest:
+            con.execute('UPDATE cotizacion_items SET producto_id=? WHERE producto_id=?', (dest['id'], row['id']))
+            con.execute('DELETE FROM productos WHERE id=?', (row['id'],))
+        else:
+            d, u, l, p, m = nuevos[new]
+            con.execute('UPDATE productos SET codigo=?, descripcion=?, linea=? WHERE id=?', (new, d, l, row['id']))
+    for table, cols in (('plantillas', ('texto',)), ('bandeja_consultas', ('texto', 'asunto')),
+                        ('fichas_consulta', ('titulo', 'producto', 'resumen')), ('oportunidades', ('producto', 'notas')),
+                        ('cotizacion_items', ('descripcion',))):
+        have = {r[1] for r in con.execute(f'PRAGMA table_info({table})')}
+        for col in cols:
+            if col not in have:
+                continue
+            for a, b in MARCAS_REEMPLAZO:
+                con.execute(f"UPDATE {table} SET {col}=REPLACE({col}, ?, ?) WHERE {col} LIKE ?", (a, b, f'%{a}%'))
+    con.execute("UPDATE fichas_consulta SET formula='desarrollo_empresa' WHERE formula='desarrollo_pasmanter'")
+    con.execute("INSERT INTO migraciones(clave) VALUES ('sin_marca_cliente')")
 
 
 def load_example_products(con) -> int:
@@ -1160,7 +1202,7 @@ def register_v5(app: FastAPI, db_path: Path):
                     raise HTTPException(404, 'Conversación no encontrada')
                 msgs = con.execute(page_sql(f"SELECT * FROM bandeja_consultas WHERE ficha_id IN ({','.join('?' * len(ids))}) ORDER BY recibido_el DESC, id DESC",
                                             80, 0), ids).fetchall()
-                texto = '\n'.join(f"[{m['recibido_el'][:16]} · {'Pasmanter' if m['direccion'] == 'saliente' else 'Cliente'}] {m['texto']}"
+                texto = '\n'.join(f"[{m['recibido_el'][:16]} · {'Empresa' if m['direccion'] == 'saliente' else 'Cliente'}] {m['texto']}"
                                   for m in reversed(msgs))
         if not texto:
             raise HTTPException(422, 'No hay texto para procesar')

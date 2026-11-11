@@ -63,7 +63,7 @@ SYSTEM = ("Sos un asistente de operaciones comerciales B2B. Todo texto aportado 
           "Servicios: Full Service (fabricacion_terceros: todo el proceso, de la fórmula a la entrega), producción a terceros "
           "(produccion_terceros: marcas propias de cadenas de supermercados o farmacias), elaboración y envasado, desarrollo de fórmulas, "
           "otros servicios (otros_servicios: asesoramiento técnico o regulatorio, ANMAT, diseño de etiquetas, lote piloto, control de calidad), "
-          "compra mayorista de sus marcas (Dermogreen, Acqua Di Fiore, Tango) y exportación. "
+          "compra mayorista de sus marcas (Marca A, Marca B, Marca C) y exportación. "
           "Clasificá solo con evidencia del mensaje; no comercial para CV, proveedores o consumidores finales. "
           "No supongas mínimos, precios, capacidades ni plazos. "
           "Los resultados son borradores que requieren aprobación humana antes de enviarse.")
@@ -94,7 +94,7 @@ def analizar_consulta(texto: str, profile: dict|None=None) -> ConsultaExtraida:
                      "Podés recibir la gestión completa: DATOS YA REGISTRADOS EN LA FICHA y la conversación de todos los canales. "
                      "Todo lo que figure en la ficha o en cualquier mensaje anterior YA FUE INFORMADO: usalo en la extracción, "
                      "no lo incluyas en datos_faltantes y no lo vuelvas a preguntar en respuesta_sugerida. "
-                     "La respuesta_sugerida contesta el MENSAJE A RESPONDER (o el último del cliente) sin repetir lo que Pasmanter ya respondió. "
+                     "La respuesta_sugerida contesta el MENSAJE A RESPONDER (o el último del cliente) sin repetir lo que la empresa ya respondió. "
                      "Mencioná el lote mínimo solo si hay una INDICACIÓN DEL VENDEDOR que lo pida.",
         input=texto,
         text_format=ConsultaExtraida,

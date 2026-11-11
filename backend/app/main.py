@@ -340,7 +340,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
             texto = (build_case_context(con, msg['ficha_id'], message_id, payload.informar_lote_minimo)
                      if msg['ficha_id'] else msg['texto'])
             if payload.objetivo == 'seguimiento':
-                texto += ('\n\nINDICACIÓN DEL VENDEDOR: el cliente no respondió desde el último mensaje de Pasmanter. '
+                texto += ('\n\nINDICACIÓN DEL VENDEDOR: el cliente no respondió desde el último mensaje de la empresa. '
                           'En respuesta_sugerida prepará un mensaje breve y cordial de seguimiento para retomar el contacto, '
                           'recordando lo enviado (sin inventar montos ni condiciones) y preguntando si tiene dudas o puede avanzar.')
         if existing and existing['resultado'] is not None and not payload.regenerar and payload.objetivo == 'responder':

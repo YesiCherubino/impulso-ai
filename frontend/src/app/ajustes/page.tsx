@@ -1,8 +1,7 @@
 'use client';
 import {useCallback,useEffect,useState} from 'react';
-import {Plus,UserRound,Check,X} from 'lucide-react';
+import {Plus,UserRound,Check,X,Pencil,Trash2} from 'lucide-react';
 import Shell from '@/components/shell';
-import ThemeToggle from '@/components/theme-toggle';
 import {api,Rol,roleName,UsuarioSesion} from '@/lib/api';
 import {ImportPanel,EmpresaPanel,ReglasPanel,PlantillasPanel,DocumentosPanel,ChatPanel,IntegracionesPanel} from '@/components/admin-v5';
 
@@ -32,7 +31,6 @@ export default function Ajustes(){
     {sec==='preferencias'&&<section className="panel v2-admin-list"><div className="v3-section-line"><h3>Preferencias</h3></div>
      <div className="v7-pref-rows">
       <div className="v7-pref-row"><div><strong>Densidad</strong><small>Cuánta información entra en pantalla.</small></div><div className="v7-seg"><button type="button" className={density==='comoda'?'is-on':''} onClick={()=>changeDensity('comoda')}>Cómoda</button><button type="button" className={density==='compacta'?'is-on':''} onClick={()=>changeDensity('compacta')}>Compacta</button></div></div>
-      <div className="v7-pref-row"><div><strong>Tema</strong><small>Se guarda en tu cuenta.</small></div><ThemeToggle userTheme={me?.theme} authenticated={!!me} onThemeSaved={t=>setMe(o=>o?{...o,theme:t}:o)}/></div>
      </div>
      {!isAdmin&&me&&<p className="v8-settings-note">Los usuarios, permisos, datos de la empresa y demás ajustes generales los maneja el administrador.</p>}</section>}
     {sec==='usuarios'&&isAdmin&&<Usuarios me={me} ok={ok} fail={fail} busy={busy} setBusy={setBusy}/>}
@@ -53,22 +51,37 @@ function Usuarios({me,ok,fail,busy,setBusy}:{me:UsuarioSesion|null;ok:(m:string)
  const load=useCallback(async()=>{try{const [u,m]=await Promise.all([api<User[]>('/api/admin/users'),api<Matriz>('/api/permisos')]);setUsers(u);setMatriz(m)}catch(e){fail(e instanceof Error?e.message:'No se pudo cargar')}},[fail]);
  useEffect(()=>{void load()},[load]);
  async function add(e:React.FormEvent){e.preventDefault();setBusy(true);try{await api('/api/admin/users',{method:'POST',body:JSON.stringify(form)});setForm(blank);setNewOpen(false);ok('Usuario creado');await load()}catch(x){fail(x instanceof Error?x.message:'No se pudo crear')}finally{setBusy(false)}}
- async function update(u:User,updates:Partial<User>){setBusy(true);try{await api(`/api/admin/users/${u.id}`,{method:'POST',body:JSON.stringify({name:updates.name??u.name,role:updates.role??u.role,active:updates.active??u.active})});ok('Guardado');await load()}catch(x){fail(x instanceof Error?x.message:'No se pudo guardar')}finally{setBusy(false)}}
- async function reset(u:User){const password=window.prompt(`Contraseña nueva para ${u.username} (mínimo 12 caracteres):`);if(password===null)return;if(password.length<12){fail('La contraseña debe tener al menos 12 caracteres');return}setBusy(true);try{await api(`/api/admin/users/${u.id}`,{method:'POST',body:JSON.stringify({name:u.name,role:u.role,active:u.active,password})});ok('Contraseña actualizada')}catch(x){fail(String(x))}finally{setBusy(false)}}
+ const [edit,setEdit]=useState<{u:User;name:string;role:Rol;active:boolean;password:string}|null>(null),[undo,setUndo]=useState<{u:User;fichas:number[];activo:boolean;texto:string}|null>(null);
+ async function save(e:React.FormEvent){e.preventDefault();if(!edit)return;if(edit.password&&edit.password.length<12){fail('La contraseña debe tener al menos 12 caracteres');return}
+  setBusy(true);try{await api(`/api/admin/users/${edit.u.id}`,{method:'POST',body:JSON.stringify({name:edit.name.trim(),role:edit.role,active:edit.active,password:edit.password||null})});setEdit(null);setUndo(null);ok(edit.password?'Guardado. La clave nueva ya está activa.':'Guardado');await load()}catch(x){fail(x instanceof Error?x.message:'No se pudo guardar')}finally{setBusy(false)}}
+ async function remove(u:User){setBusy(true);try{const r=await api<{fichas:number[];activo:boolean}>(`/api/admin/users/${u.id}/eliminar`,{method:'POST',body:'{}'});setEdit(null);ok('');
+  setUndo({u,fichas:r.fichas,activo:r.activo,texto:`${u.name} fue eliminado${r.fichas.length?` y sus ${r.fichas.length} gestion${r.fichas.length===1?'':'es'} abierta${r.fichas.length===1?' quedó':'s quedaron'} sin asignar`:''}.`});await load()}catch(x){fail(x instanceof Error?x.message:'No se pudo eliminar')}finally{setBusy(false)}}
+ async function restore(){if(!undo)return;const x=undo;setUndo(null);setBusy(true);try{await api(`/api/admin/users/${x.u.id}/restaurar`,{method:'POST',body:JSON.stringify({fichas:x.fichas,activo:x.activo})});ok(`${x.u.name} volvió`);await load()}catch(e){fail(e instanceof Error?e.message:'No se pudo deshacer')}finally{setBusy(false)}}
  async function toggle(rol:'ventas'|'gerencia',permiso:string,permitido:boolean){if(!matriz)return;setMatriz({...matriz,perfiles:{...matriz.perfiles,[rol]:{...matriz.perfiles[rol],[permiso]:permitido}}});
   try{await api('/api/permisos',{method:'POST',body:JSON.stringify({rol,permiso,permitido})})}catch(x){fail(x instanceof Error?x.message:'No se pudo guardar');void load()}}
  return <>
   <section className="panel v2-admin-list"><div className="v3-section-line"><h3>Usuarios</h3><button className="btn btn-outline btn-sm" type="button" onClick={()=>setNewOpen(true)}><Plus size={14}/> Nuevo usuario</button></div>
-   <div className="v3-user-list">{users.map(u=><div key={u.id} className="v3-user-row"><div className="v3-user-avatar"><UserRound size={17}/></div><div className="v3-user-data"><strong>{u.name}</strong><small>{u.username}</small></div>
-    <select aria-label={`Perfil de ${u.username}`} value={u.role} disabled={busy} onChange={e=>void update(u,{role:e.target.value as Rol})}>{Object.entries(roleName).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select>
-    <label className="v2-active-checkbox"><input type="checkbox" checked={Boolean(u.active)} disabled={busy||u.id===me?.id} onChange={e=>void update(u,{active:e.target.checked})}/> Activo</label>
-    <button className="btn btn-outline btn-sm" disabled={busy} onClick={()=>void reset(u)}>Cambiar clave</button></div>)}</div></section>
+   {undo&&<p className="v3-success v9-undo-line" role="status">{undo.texto}<button type="button" className="v7-undo" onClick={()=>void restore()}>Deshacer</button></p>}
+   <div className="v9-user-list">{users.map(u=><div key={u.id} className={`v9-user-row ${u.active?'':'is-off'}`}><span className="v2-avatar" aria-hidden="true">{u.name.slice(0,1).toUpperCase()}</span>
+    <div className="v9-user-data"><strong>{u.name}{u.id===me?.id&&<small> (vos)</small>}</strong><small>{u.username}{!u.active&&' · inactivo'}</small></div>
+    <span className={`v8-role is-${u.role}`}>{roleName[u.role]}</span>
+    <div className="v8-row-actions"><button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={()=>setEdit({u,name:u.name,role:u.role,active:Boolean(u.active),password:''})}><Pencil size={13}/> Editar</button>
+     {u.id!==me?.id&&<button type="button" className="icon-button" title={`Eliminar a ${u.name}`} aria-label={`Eliminar a ${u.name}`} disabled={busy} onClick={()=>void remove(u)}><Trash2 size={15}/></button>}</div></div>)}</div></section>
   {matriz&&<section className="panel v2-admin-list"><div className="v3-section-line"><h3>Permisos por perfil</h3></div>
    <div className="v5-table-wrap"><table className="v5-mini-table v7-perms"><thead><tr><th>Permiso</th><th>Ventas</th><th>Gerencia</th><th>Administrador</th></tr></thead>
     <tbody>{matriz.permisos.map(p=><tr key={p.clave}><td>{p.nombre}</td>{(['ventas','gerencia'] as const).map(r=><td key={r}><input type="checkbox" aria-label={`${p.nombre} para ${roleName[r]}`} checked={!!matriz.perfiles[r][p.clave]} onChange={e=>void toggle(r,p.clave,e.target.checked)}/></td>)}<td><input type="checkbox" checked disabled aria-label="Administrador tiene todos los permisos"/></td></tr>)}</tbody></table></div>
    <p className="muted">El perfil Administrador tiene siempre todos los permisos. Para revisar cómo queda cada perfil, usá "Ver como" en el menú lateral.</p></section>}
   {newOpen&&<div className="modal-backdrop v2-overlay" onMouseDown={()=>setNewOpen(false)}><div className="modal" role="dialog" aria-modal="true" aria-label="Nuevo usuario" onMouseDown={e=>e.stopPropagation()}><div className="modal-head"><h2>Nuevo usuario</h2><button className="icon-button" aria-label="Cerrar" onClick={()=>setNewOpen(false)}><X size={18}/></button></div>
    <form className="fields" onSubmit={e=>void add(e)}><label>Usuario<input required minLength={3} maxLength={60} value={form.username} onChange={e=>setForm({...form,username:e.target.value})}/></label><label>Nombre<input required minLength={2} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label><label>Contraseña<input required type="password" minLength={12} value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></label><label>Perfil<select value={form.role} onChange={e=>setForm({...form,role:e.target.value as Rol})}>{Object.entries(roleName).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label><button className="btn btn-primary" type="submit" disabled={busy}>Crear usuario</button></form></div></div>}
+  {edit&&<div className="modal-backdrop v2-overlay" onMouseDown={()=>setEdit(null)}><div className="modal" role="dialog" aria-modal="true" aria-label={`Editar a ${edit.u.name}`} onMouseDown={e=>e.stopPropagation()}><div className="modal-head"><h2>Editar usuario</h2><button className="icon-button" aria-label="Cerrar" onClick={()=>setEdit(null)}><X size={18}/></button></div>
+   <form className="fields" onSubmit={e=>void save(e)}>
+    <label>Nombre<input required minLength={2} maxLength={120} autoFocus value={edit.name} onChange={e=>setEdit({...edit,name:e.target.value})}/></label>
+    <label>Usuario<input value={edit.u.username} disabled/><small className="muted">Es con lo que entra y queda en el historial; no se cambia.</small></label>
+    <label>Perfil<select value={edit.role} disabled={edit.u.id===me?.id} onChange={e=>setEdit({...edit,role:e.target.value as Rol})}>{Object.entries(roleName).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
+    <label>Clave nueva<input type="password" minLength={12} autoComplete="new-password" placeholder="Dejala vacía para no cambiarla" value={edit.password} onChange={e=>setEdit({...edit,password:e.target.value})}/></label>
+    {edit.u.id!==me?.id&&<label className="v3-config-check"><input type="checkbox" checked={edit.active} onChange={e=>setEdit({...edit,active:e.target.checked})}/> Activo <small className="muted">(si lo desactivás no puede entrar; lo podés reactivar cuando quieras)</small></label>}
+    <div className="v9-modal-actions">{edit.u.id!==me?.id&&<button type="button" className="btn btn-outline v9-danger" disabled={busy} onClick={()=>void remove(edit.u)}><Trash2 size={14}/> Eliminar usuario</button>}<button className="btn btn-primary" type="submit" disabled={busy}><Check size={15}/> Guardar</button></div>
+   </form></div></div>}
  </>;
 }
 
@@ -103,7 +116,7 @@ function MiAsistente({ok,fail,admin}:{ok:(m:string)=>void;fail:(m:string)=>void;
   <label>Tono<select value={o.tono||''} onChange={e=>set({tono:e.target.value||null})}><option value="">Como la empresa ({TONOS[b.tono]||b.tono})</option>{Object.entries(TONOS).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
   <label>Extensión<select value={o.extension||''} onChange={e=>set({extension:e.target.value||null})}><option value="">Como la empresa ({EXTENSIONES[b.extension]||b.extension})</option>{Object.entries(EXTENSIONES).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
   <label>Signos de apertura (¿ ¡)<select value={signos} onChange={e=>set({signos_apertura:e.target.value===''?null:e.target.value==='si'})}><option value="">Como la empresa ({b.signos_apertura?'sí':'no'})</option><option value="si">Sí</option><option value="no">No</option></select></label>
-  <label className="wide">Firma<input value={o.firma} maxLength={200} onChange={e=>set({firma:e.target.value})} placeholder="Ej.: Lucía Gómez · Ventas Pasmanter"/></label></div>
+  <label className="wide">Firma<input value={o.firma} maxLength={200} onChange={e=>set({firma:e.target.value})} placeholder="Ej.: Lucía Gómez · Ventas Empresa S.A."/></label></div>
   <button type="submit" className="btn btn-primary" disabled={busy}><Check size={16}/> Guardar</button></form></section>;
 }
 

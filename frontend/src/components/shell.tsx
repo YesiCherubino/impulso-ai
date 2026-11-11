@@ -7,12 +7,13 @@ import Notifications from '@/components/notifications';
 import ImpulsoMark from '@/components/impulso-mark';
 import CommandPalette from '@/components/command-palette';
 import TeamChat from '@/components/team-chat';
+import ThemeToggle,{aplicarTema} from '@/components/theme-toggle';
 import {api,UsuarioSesion,roleName,setVerComo} from '@/lib/api';
 
 const nav=[
- {href:'/mi-dia',label:'Mi día',icon:Sun},
  {href:'/consultas',label:'Bandeja',icon:Inbox},
- {href:'/',label:'Contactos',icon:ContactRound},
+ {href:'/mi-dia',label:'Mi día',icon:Sun},
+ {href:'/contactos',label:'Contactos',icon:ContactRound},
  {href:'/cotizaciones',label:'Cotizaciones',icon:Receipt},
  {href:'/agenda',label:'Agenda',icon:CalendarDays},
  {href:'/finalizados',label:'Finalizados',icon:FileCheck2},
@@ -39,20 +40,21 @@ export default function Shell({children}:{children:React.ReactNode}){
   if(!authEnabled){setSessionReady(true);return}
   let active=true;
   fetch('/api/session/me',{cache:'no-store'}).then(async r=>{if(!r.ok)throw Error('Sin sesión');return r.json()})
-   .then((u:UsuarioSesion)=>{if(active){setUser(u);setSessionReady(true);const tema=u.theme==='oscuro'?'dark':'light';document.documentElement.dataset.theme=tema;window.localStorage.setItem('impulso-theme',tema);}})
+   .then((u:UsuarioSesion)=>{if(active){setUser(u);setSessionReady(true);aplicarTema(u.theme==='claro'||u.theme==='oscuro'?u.theme:'auto');}})
    .catch(()=>{if(active)router.replace('/login')});
   return()=>{active=false};
  },[authEnabled,router]);
  async function signOut(){document.cookie='impulso_ver_como=; path=/; max-age=0';await fetch('/api/session/logout',{method:'POST'});router.replace('/login');router.refresh()}
  if(!sessionReady)return <div className="login-screen" style={{display:'grid',placeItems:'center',minHeight:'100vh'}}>Cargando…</div>;
- const title=pathname.startsWith('/oportunidades/')?'Contacto':nav.find(n=>n.href===pathname||(n.href!=='/'&&pathname.startsWith(n.href)))?.label??'Impulso';
+ const title=pathname.startsWith('/oportunidades/')?'Contacto':nav.find(n=>pathname.startsWith(n.href))?.label??'Impulso';
  const isAdmin=user?.role==='administrador'||user?.rol_real==='administrador';
  const go=(href:string)=>()=>setMenuOpen(false);
  return <div className="app-shell office-app v2-office">
   <aside className={`sidebar ${menuOpen?'sidebar-open':''}`}>
-   <div className="office-brand-row"><Link href="/mi-dia" className="brand v2-brand v7-brand" onClick={go('/mi-dia')}><span className="impulso-mark" aria-hidden="true"><ImpulsoMark/></span><strong>Impulso</strong></Link><button className="office-close-menu" onClick={()=>setMenuOpen(false)} aria-label="Cerrar menú"><X size={19}/></button></div>
-   <nav className="side-nav" aria-label="Navegación principal">{nav.map(item=>{const Icon=item.icon;const active=item.href==='/'?pathname==='/':pathname.startsWith(item.href);return <Link key={item.href} href={item.href} className={active?'active':''} aria-current={active?'page':undefined} onClick={go(item.href)}><Icon size={17} strokeWidth={1.6}/><span>{item.label}</span></Link>})}</nav>
+   <div className="office-brand-row"><Link href="/consultas" className="brand v2-brand v7-brand" onClick={go('/consultas')}><span className="impulso-mark" aria-hidden="true"><ImpulsoMark/></span><strong>Impulso</strong></Link><button className="office-close-menu" onClick={()=>setMenuOpen(false)} aria-label="Cerrar menú"><X size={19}/></button></div>
+   <nav className="side-nav" aria-label="Navegación principal">{nav.map(item=>{const Icon=item.icon;const active=pathname.startsWith(item.href)||(item.href==='/contactos'&&pathname.startsWith('/oportunidades/'));return <Link key={item.href} href={item.href} className={active?'active':''} aria-current={active?'page':undefined} onClick={go(item.href)}><Icon size={17} strokeWidth={1.6}/><span>{item.label}</span></Link>})}</nav>
    <div className="office-sidebar-footer v2-sidebar-footer">
+    <ThemeToggle userTheme={user?.theme} authenticated={!!user} onThemeSaved={t=>setUser(o=>o?{...o,theme:t}:o)}/>
     <div className="v2-user-label"><span className="v2-avatar">{(user?.name||'Usuario').slice(0,1).toUpperCase()}</span><span><strong>{user?.name||'Usuario'}</strong>{user&&<small className={`v8-role is-${user.rol_real||user.role}`}>{roleName[user.rol_real||user.role]}</small>}</span></div>
     {isAdmin&&<label className="v7-pref"><span><Eye size={14}/> Ver como</span><select aria-label="Ver como" value={user?.viendo_como||''} onChange={e=>setVerComo(e.target.value as ''|'ventas'|'gerencia')}><option value="">Administrador</option><option value="ventas">Ventas</option><option value="gerencia">Gerencia</option></select></label>}
     {authEnabled&&<button type="button" className="v2-footer-action" onClick={()=>void signOut()}><LogOut size={17} strokeWidth={1.6}/> Cerrar sesión</button>}
@@ -66,8 +68,8 @@ export default function Shell({children}:{children:React.ReactNode}){
    <main className="content">{children}</main>
   </div>
   <nav className="v7-bottom-nav" aria-label="Accesos rápidos">
-   <Link href="/mi-dia" className={pathname.startsWith('/mi-dia')?'active':''}><Sun size={19}/><span>Mi día</span></Link>
    <Link href="/consultas" className={pathname.startsWith('/consultas')?'active':''}><Inbox size={19}/><span>Bandeja</span></Link>
+   <Link href="/mi-dia" className={pathname.startsWith('/mi-dia')?'active':''}><Sun size={19}/><span>Mi día</span></Link>
    <button type="button" onClick={()=>window.dispatchEvent(new Event('impulso:abrir-chat'))}><MessagesSquare size={19}/><span>Chat</span></button>
    <button type="button" onClick={()=>setPalette(true)}><Search size={19}/><span>Buscar</span></button>
   </nav>

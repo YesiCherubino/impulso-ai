@@ -1,4 +1,4 @@
-"""V4: mejoras comerciales para Pasmanter.
+"""V4: mejoras comerciales.
 
 - Contexto completo para la IA (todos los mensajes de la gestión + datos de la ficha).
 - Extracción determinística del formulario web.
@@ -125,7 +125,7 @@ def datos_a_confirmar(ficha: dict) -> list[str]:
         missing.append('Tipo de servicio')
     checks = [('producto', 'Producto'), ('cantidad', 'Cantidad estimada'), ('presentacion', 'Presentación (ml/g)')]
     if tipo in TIPOS_PRODUCCION or tipo in ('sin_clasificar', 'otro'):
-        checks += [('formula', '¿Fórmula propia o desarrollo de Pasmanter?'), ('packaging', 'Packaging'),
+        checks += [('formula', '¿Fórmula propia o desarrollo de la empresa?'), ('packaging', 'Packaging'),
                    ('marca_registrada', '¿Tiene marca registrada?'), ('registro_anmat', 'Registro ANMAT')]
     checks += [('destino', 'Destino (mercado local o exportación)')]
     if ficha.get('destino') == 'exportacion' or tipo == 'exportacion':
@@ -228,7 +228,7 @@ def build_case_context(con, ficha_id: int, focus_message_id: int | None = None,
     rows = con.execute('''SELECT * FROM bandeja_consultas WHERE ficha_id=? ORDER BY recibido_el,id''',
                        (ficha_id,)).fetchall()
     for m in rows:
-        who = 'Pasmanter (respuesta ya enviada)' if m['direccion'] == 'saliente' else f"Cliente ({m['contacto']})"
+        who = 'Empresa (respuesta ya enviada)' if m['direccion'] == 'saliente' else f"Cliente ({m['contacto']})"
         subject = f" · Asunto: {m['asunto']}" if m['asunto'] else ''
         marker = ' ← MENSAJE A RESPONDER' if focus_message_id and m['id'] == focus_message_id else ''
         lines.append(f"[{m['recibido_el'][:16].replace('T', ' ')} · {canal_base(m['canal'])} · {who}{subject}]{marker}")
@@ -276,7 +276,7 @@ def apply_analysis(con, ficha_id: int, result: dict, regenerar: bool) -> dict:
     if not ficha:
         return result
     editados = set(json.loads(ficha['campos_editados_json'] or '[]'))
-    formula = {'si': 'desarrollo_pasmanter', 'no': 'propia'}.get(result.get('necesita_formula', ''), '')
+    formula = {'si': 'desarrollo_empresa', 'no': 'propia'}.get(result.get('necesita_formula', ''), '')
     proposed = {
         'producto': (result.get('producto') or '').strip(),
         'cantidad': result.get('cantidad'),

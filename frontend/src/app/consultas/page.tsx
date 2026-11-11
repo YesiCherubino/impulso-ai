@@ -306,7 +306,7 @@ export default function BandejaConsultas(){
      </div>
      <div className="v5-ai-wrap">
       <button type="button" className="v4-icon-action v6-attach" aria-label="Adjuntar documento" title="Adjuntar catálogo, ficha técnica u otro documento" aria-expanded={attachMenu} onClick={()=>{setAttachMenu(v=>!v);setAiMenu(false)}}><Paperclip size={18}/></button>
-      {attachMenu&&<div className="v5-ai-menu v6-attach-menu" role="menu"><div className="v4-menu-heading">Documentos de Pasmanter</div>
+      {attachMenu&&<div className="v5-ai-menu v6-attach-menu" role="menu"><div className="v4-menu-heading">Documentos de la empresa</div>
        {docs.map(d=>{const on=attach.some(a=>a.id===d.id);return <button type="button" role="menuitemcheckbox" aria-checked={on} key={d.id} className={`v4-menu-item ${on?'is-current':''}`} onClick={()=>setAttach(old=>on?old.filter(a=>a.id!==d.id):[...old,d])}><FileText size={15}/><span className="v4-menu-copy"><strong>{d.nombre}</strong><small>{d.descripcion||tamanoTexto(d.tamano)}</small></span>{on&&<Check size={15}/>}</button>})}
        {!docs.length&&<p className="muted v6-pad">Todavía no hay documentos. {user?.role==='administrador'?<Link href="/ajustes?s=contenido">Subilos en Administración</Link>:'Pedile a Administración que los suba.'}</p>}
       </div>}

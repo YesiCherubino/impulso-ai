@@ -133,7 +133,7 @@ class FichaEdit(BaseModel):
     datos_faltantes: list[str] = Field(default_factory=list,max_length=40)
     resumen: str = Field(default='',max_length=2000)
     # V4: calificación. Si no se envían, se conservan los valores guardados.
-    formula: Literal['propia','desarrollo_pasmanter','sin_especificar']|None = None
+    formula: Literal['propia','desarrollo_empresa','sin_especificar']|None = None
     marca_registrada: SiNoFicha|None = None
     registro_anmat: Literal['si','no','en_tramite','sin_especificar']|None = None
     destino: Literal['','local','exportacion']|None = None
@@ -142,7 +142,7 @@ class FichaEdit(BaseModel):
     localidad: str|None = Field(default=None,max_length=120)
     origen: Literal['manual','ia'] = 'manual'
     confirmar_tipo: bool = False
-    # V6: datos del rubro de Pasmanter.
+    # V6: datos del rubro (cosmética e higiene).
     rubro: str|None = Field(default=None,max_length=60)
     envase: str|None = Field(default=None,max_length=60)
     tipo_cliente: str|None = Field(default=None,max_length=60)
@@ -192,7 +192,7 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
     def set_theme(request:Request,payload:dict):
         user = current(request,db_path,'ventas','administrador','gerencia')
         theme = payload.get('theme')
-        if theme not in ('claro','oscuro'):
+        if theme not in ('claro','oscuro','auto'):
             raise HTTPException(422,'Tema inválido')
         with connect(db_path) as con:
             con.execute('UPDATE usuarios SET tema=? WHERE id=?',(theme,user['id']))
@@ -202,24 +202,25 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
     def users(request:Request):
         current(request,db_path,'administrador')
         with connect(db_path) as con:
-            return [dict(r) for r in con.execute('SELECT id,usuario AS username,nombre AS name,rol AS role,activo AS active,tema AS theme,creado_en FROM usuarios ORDER BY id')]
+            return [dict(r) for r in con.execute('SELECT id,usuario AS username,nombre AS name,rol AS role,activo AS active,tema AS theme,creado_en FROM usuarios WHERE eliminado_en IS NULL ORDER BY nombre')]
 
     @app.post('/api/admin/users',status_code=201)
     def create_user(request:Request,payload:UserCreate):
         current(request,db_path,'administrador')
         with connect(db_path) as con:
             try:
-                cur=con.execute('INSERT INTO usuarios(usuario,nombre,password_hash,rol,creado_en) VALUES (?,?,?,?,?)',
+                cur=con.execute("INSERT INTO usuarios(usuario,nombre,password_hash,rol,creado_en,tema) VALUES (?,?,?,?,?,'auto')",
                     (payload.username.casefold(),payload.name,auth.password_hash(payload.password),payload.role,stamp()))
             except sqlite3.IntegrityError:
-                raise HTTPException(409,'El usuario ya existe')
-            return {'id':cur.lastrowid,'username':payload.username.casefold(),'name':payload.name,'role':payload.role,'active':True,'theme':'claro'}
+                gone=con.execute('SELECT 1 FROM usuarios WHERE usuario=? AND eliminado_en IS NOT NULL',(payload.username.casefold(),)).fetchone()
+                raise HTTPException(409,'Ese nombre de usuario perteneció a un usuario eliminado; elegí otro' if gone else 'El usuario ya existe')
+            return {'id':cur.lastrowid,'username':payload.username.casefold(),'name':payload.name,'role':payload.role,'active':True,'theme':'auto'}
 
     @app.post('/api/admin/users/{id_}')
     def edit_user(request:Request,id_:int,payload:UserEdit):
         me=current(request,db_path,'administrador')
         with connect(db_path) as con:
-            old=con.execute('SELECT id,rol FROM usuarios WHERE id=?',(id_,)).fetchone()
+            old=con.execute('SELECT id,rol FROM usuarios WHERE id=? AND eliminado_en IS NULL',(id_,)).fetchone()
             if not old:raise HTTPException(404,'Usuario no encontrado')
             if id_==me['id'] and (payload.role!='administrador' or not payload.active):
                 raise HTTPException(400,'No podés quitarte tu propio acceso de administración')
@@ -233,6 +234,48 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
                             (auth.password_hash(payload.password),id_))
                 con.execute('DELETE FROM sesiones WHERE usuario_id=?',(id_,))
             return {'ok':True}
+
+    @app.post('/api/admin/users/{id_}/eliminar')
+    def delete_user(request:Request,id_:int):
+        """Baja del usuario: no entra más ni aparece en listas; sus gestiones abiertas quedan sin asignar.
+        El historial, las cotizaciones y los mensajes conservan quién hizo cada cosa."""
+        me=current(request,db_path,'administrador')
+        from .comercial_v5 import OPEN_SQL
+        from .historial import log
+        with connect(db_path) as con:
+            con.execute('BEGIN IMMEDIATE')
+            u=con.execute('SELECT * FROM usuarios WHERE id=? AND eliminado_en IS NULL',(id_,)).fetchone()
+            if not u:raise HTTPException(404,'Usuario no encontrado')
+            if me and id_==me['id']:raise HTTPException(400,'No podés eliminar tu propio usuario')
+            if u['rol']=='administrador':
+                count=con.execute("SELECT COUNT(*) FROM usuarios WHERE rol='administrador' AND activo=1 AND eliminado_en IS NULL").fetchone()[0]
+                if count<=1:raise HTTPException(400,'Debe quedar al menos un administrador activo')
+            fichas=[r['id'] for r in con.execute(f'SELECT id FROM fichas_consulta WHERE LOWER(responsable)=LOWER(?) AND estado_gestion IN {OPEN_SQL}',(u['usuario'],))]
+            for f in fichas:
+                con.execute("UPDATE fichas_consulta SET responsable='' WHERE id=?",(f,))
+                log(con,f,'responsable','',f'{u["nombre"]} fue dado de baja',me['username'] if me else '')
+            con.execute('UPDATE usuarios SET activo=0,eliminado_en=? WHERE id=?',(stamp(),id_))
+            con.execute('DELETE FROM sesiones WHERE usuario_id=?',(id_,))
+            return {'ok':True,'fichas':fichas,'activo':bool(u['activo'])}
+
+    class RestoreUser(BaseModel):
+        fichas: list[int] = []
+        activo: bool = True
+
+    @app.post('/api/admin/users/{id_}/restaurar')
+    def restore_user(request:Request,id_:int,payload:RestoreUser):
+        """Deshacer la baja: vuelve el usuario y recupera las gestiones que siguen sin asignar."""
+        me=current(request,db_path,'administrador')
+        from .historial import log
+        with connect(db_path) as con:
+            u=con.execute('SELECT * FROM usuarios WHERE id=? AND eliminado_en IS NOT NULL',(id_,)).fetchone()
+            if not u:raise HTTPException(404,'Usuario no encontrado')
+            con.execute('UPDATE usuarios SET activo=?,eliminado_en=NULL WHERE id=?',(int(payload.activo),id_))
+            back=0
+            for f in payload.fichas[:5000]:
+                if con.execute("UPDATE fichas_consulta SET responsable=? WHERE id=? AND responsable=''",(u['usuario'],f)).rowcount:
+                    log(con,f,'responsable',u['usuario'],'se deshizo la baja',me['username'] if me else '');back+=1
+            return {'ok':True,'reasignadas':back}
 
     @app.post('/api/inbox/new',status_code=201)
     def create_message(request:Request,payload:NewMessage):

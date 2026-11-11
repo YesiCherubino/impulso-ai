@@ -1,4 +1,4 @@
-"""V4: IA con contexto completo, fusión, métricas unificadas, pipeline y calificación Pasmanter."""
+"""V4: IA con contexto completo, fusión, métricas unificadas, pipeline y calificación comercial."""
 from datetime import date, datetime, timedelta, timezone
 import json
 import os
@@ -14,7 +14,7 @@ from app.db import connect
 from app.escala import refresh_case_stats
 from app.main import create_app
 
-FORM = ('Solicitud desde el formulario de Pasmanter. Producto: Máscara capilar de 300 ml. '
+FORM = ('Solicitud desde el formulario web. Producto: Máscara capilar de 300 ml. '
         'Cantidad estimada: 5000 unidades. Localidad: CABA. Solicitamos información comercial.')
 
 

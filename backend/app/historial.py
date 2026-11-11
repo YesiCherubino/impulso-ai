@@ -40,7 +40,12 @@ def timeline(con, ficha_id: int) -> dict:
     f = con.execute('SELECT * FROM fichas_consulta WHERE id=?', (ficha_id,)).fetchone()
     if not f:
         raise HTTPException(404, 'Gestión no encontrada')
-    events = [dict(r) for r in con.execute('SELECT * FROM gestion_eventos WHERE ficha_id=? ORDER BY id', (ficha_id,))]
+    # Con el nombre de quien lo hizo, aunque el usuario ya no esté (dado de baja).
+    events = [dict(r) for r in con.execute('''SELECT e.*, COALESCE(u.nombre, '') AS usuario_nombre,
+                                              COALESCE(v.nombre, '') AS valor_nombre FROM gestion_eventos e
+                                              LEFT JOIN usuarios u ON LOWER(u.usuario)=LOWER(e.usuario)
+                                              LEFT JOIN usuarios v ON e.tipo='responsable' AND LOWER(v.usuario)=LOWER(e.valor)
+                                              WHERE e.ficha_id=? ORDER BY e.id''', (ficha_id,))]
     # Etapas: desde la creación, cada cambio de estado abre un tramo nuevo.
     start = _dt(f['creada_en']) or datetime.now(timezone.utc)
     changes = [(e['valor'], _dt(e['creado_en'])) for e in events if e['tipo'] == 'estado' and _dt(e['creado_en'])]

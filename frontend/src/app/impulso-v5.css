@@ -1,4 +1,4 @@
-/* Impulso V4 (Pasmanter): pipeline, prioridad, calificación, respuestas registradas y reportes de gerencia.
+/* Impulso V4: pipeline, prioridad, calificación, respuestas registradas y reportes de gerencia.
    Usa los tokens --v3-* existentes; solo agrega colores de estado con su variante oscura. */
 .v2-office{--v5-warn-bg:#fbf1dd;--v5-warn-ink:#8a5a12;--v5-danger-bg:#f8e3df;--v5-danger-ink:#9b3f31;--v5-info-bg:#e6f0f3;--v5-info-ink:#2a5866;--v5-ok-ink:#3f7360;--v5-out-bg:#e8f1ef}
 html[data-theme='dark'] .v2-office{--v5-warn-bg:#3b3020;--v5-warn-ink:#f0c879;--v5-danger-bg:#412824;--v5-danger-ink:#f3aa9d;--v5-info-bg:#203238;--v5-info-ink:#9fd0dd;--v5-ok-ink:#93cbb4;--v5-out-bg:#25373a}

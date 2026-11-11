@@ -135,21 +135,21 @@ DEMO_CONTACTS = [
  ('Marea Sur','Eugenia Peralta','Productos capilares','mayorista'),
  ('Nativa Laboratorios','Mariano Ruiz','Jabón líquido','producción'),
  # V4: casos realistas del rubro (índices 20 a 24).
- ('Farmacias del Plata','Lorena Sosa','Línea Dermogreen','compra mayorista'),
+ ('Farmacias del Plata','Lorena Sosa','Línea Marca A','compra mayorista'),
  ('Brote Skincare','Tomás Herrera','Sérum facial de 30 ml','fabricación para terceros'),
- ('Distribuidora Guaraní','Ramón Benítez','Fragancias Acqua Di Fiore','exportación'),
+ ('Distribuidora Guaraní','Ramón Benítez','Fragancias Marca B','exportación'),
  ('Micaela Romero','Micaela Romero','Búsqueda laboral','no comercial'),
  ('Envases Litoral','Diego Ferreyra','Envases PET y frascos de vidrio','no comercial'),
 ]
 
 # V4: consultas realistas para probar clasificación, lote mínimo, exportación y no comerciales.
 DEMO_V4 = [
- ('v4-01',20,'Correo','Buenas tardes. Somos una cadena de 35 farmacias en el AMBA y queremos incorporar la línea Dermogreen. '
-  '¿Nos pueden enviar lista de precios mayorista, condiciones de pago y pedido mínimo?','Línea Dermogreen para cadena de farmacias'),
+ ('v4-01',20,'Correo','Buenas tardes. Somos una cadena de 35 farmacias en el AMBA y queremos incorporar la línea Marca A. '
+  '¿Nos pueden enviar lista de precios mayorista, condiciones de pago y pedido mínimo?','Línea Marca A para cadena de farmacias'),
  ('v4-02',21,'WhatsApp','Hola! Estamos lanzando una marca de skincare y queremos fabricar 2.000 unidades de sérum facial de 30 ml '
   'con nuestra propia fórmula. ¿Pueden producirlo y en qué plazo?',''),
  ('v4-03',22,'Correo','Buen día. Somos distribuidores de perfumería en Asunción, Paraguay, y nos interesa importar las fragancias '
-  'Acqua Di Fiore. ¿Exportan a Paraguay? ¿Con qué condiciones y documentación trabajan?','Exportación de fragancias a Paraguay'),
+  'Marca B. ¿Exportan a Paraguay? ¿Con qué condiciones y documentación trabajan?','Exportación de fragancias a Paraguay'),
  ('v4-04',23,'Formulario web','Hola, soy técnica química y me gustaría trabajar en el laboratorio. Les dejo mi CV para '
   'búsquedas en control de calidad. Quedo a disposición.','Formulario web · Contacto'),
  ('v4-05',24,'Correo','Estimados: somos fabricantes de envases PET y frascos de vidrio para cosmética. Queremos presentarles '
@@ -192,7 +192,7 @@ def seed_demo_v3(con, include_web=True):
         for j in range(5):
             idx=j
             client,person,product,_=DEMO_CONTACTS[idx]
-            text=f'Solicitud desde el formulario de Pasmanter. Producto: {product}. Cantidad estimada: {2000+j*1000} unidades. Localidad: CABA. Solicitamos información comercial.'
+            text=f'Solicitud desde el formulario web. Producto: {product}. Cantidad estimada: {2000+j*1000} unidades. Localidad: CABA. Solicitamos información comercial.'
             fixtures.append((f'v3-web-{j+1:02d}',client,person,'Formulario web',text,f'contacto{idx+1}@ejemplo.test',f'549110000{idx+1:04d}',f'Formulario web · {product}',30+j,idx))
     if include_web:
         for key,idx,channel,body,subject in DEMO_V4:

@@ -3,7 +3,7 @@ import {ChevronDown} from 'lucide-react';
 import {FichaConsulta,estadoGestionNombre,tipoConsultaNombre,unidades,fechaCorta} from '@/lib/api';
 
 export type Historial={estado:string;creada_en:string;tramos:{estado:string;desde:string;hasta:string|null;dias:number;actual?:boolean}[];
- eventos:{id:number;tipo:string;valor:string;detalle:string;usuario:string;creado_en:string}[]};
+ eventos:{id:number;tipo:string;valor:string;detalle:string;usuario:string;usuario_nombre?:string;valor_nombre?:string;creado_en:string}[]};
 
 const ETAPAS=['sin_atender','calificada','cotizada','muestra_piloto','concretada'];
 const dias=(n:number)=>n===0?'hoy':n===1?'1 día':`${n} días`;
@@ -17,7 +17,7 @@ export function CaseTimeline({data,open,onToggle,ownerName}:{data:Historial;open
  const steps=closedBad?[...ETAPAS.slice(0,-1).filter(e=>reached.has(e)),data.estado]:ETAPAS;
  const describe=(e:Historial['eventos'][number])=>{
   if(e.tipo==='estado')return <>pasó a <b>{estadoGestionNombre[e.valor]||e.valor}</b>{e.detalle?` · ${e.detalle}`:''}</>;
-  if(e.tipo==='responsable')return e.valor?<>asignó a <b>{ownerName(e.valor)}</b></>:<>dejó la gestión sin asignar</>;
+  if(e.tipo==='responsable')return e.valor?<>asignó a <b>{e.valor_nombre||ownerName(e.valor)}</b>{e.detalle?` · ${e.detalle}`:''}</>:<>dejó la gestión sin asignar{e.detalle?` · ${e.detalle}`:''}</>;
   if(e.tipo==='cotizacion')return <>generó la cotización <b>{e.valor}</b> · {e.detalle}</>;
   if(e.tipo==='derivacion')return e.valor?<>derivó a <b>{e.valor}</b></>:<>quitó la derivación</>;
   if(e.tipo==='contacto')return <>{e.detalle||'vinculó el contacto'}</>;
@@ -27,7 +27,7 @@ export function CaseTimeline({data,open,onToggle,ownerName}:{data:Historial;open
   <ol className="v7-life-steps">{steps.map((st,i)=>{const done=reached.has(st)&&st!==data.estado;const cur=st===data.estado;const future=!reached.has(st)&&!cur&&(!closedBad&&i>currentIdx);
    return <li key={st} className={`${done?'is-done':''} ${cur?'is-current':''} ${future?'is-future':''} ${cur&&closedBad&&st==='no_concretada'?'is-lost':''}`}><span className="v7-life-dot"/><span className="v7-life-name">{estadoGestionNombre[st]}</span><span className="v7-life-days">{byState.has(st)?dias(byState.get(st)!):''}</span></li>})}</ol>
   <button type="button" className="v7-life-toggle" aria-expanded={open} onClick={onToggle}>Historial <ChevronDown size={13} style={{transform:open?'rotate(180deg)':undefined}}/></button>
-  {open&&<ul className="v7-life-log">{data.eventos.map(e=><li key={e.id}><time>{fechaCorta(e.creado_en)}</time><span>{e.usuario?<b>{ownerName(e.usuario)} </b>:<b>Sistema </b>}{describe(e)}</span></li>)}
+  {open&&<ul className="v7-life-log">{data.eventos.map(e=><li key={e.id}><time>{fechaCorta(e.creado_en)}</time><span>{e.usuario?<b>{e.usuario_nombre||ownerName(e.usuario)} </b>:<b>Sistema </b>}{describe(e)}</span></li>)}
    <li><time>{fechaCorta(data.creada_en)}</time><span>Entró la consulta</span></li></ul>}
  </section>;
 }

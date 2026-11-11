@@ -130,7 +130,7 @@ def test_quote_pdf_and_state(tmp_path, monkeypatch):
     with TestClient(create_app(path)) as c:
         h = login(c)
         msg = new_case(c, h)
-        prods = c.get('/api/productos?q=dermogreen', headers=h).json()['items']
+        prods = c.get('/api/productos?q=marca%20a', headers=h).json()['items']
         assert prods
         r = c.post(f"/api/fichas/{msg['ficha_id']}/cotizaciones", headers=h, json={
             'moneda': 'ARS', 'incluye_iva': True, 'iva_pct': 21, 'condiciones': 'Pago a 30 días & <entrega> a convenir',

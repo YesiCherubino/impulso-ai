@@ -66,6 +66,13 @@ def init_auth(db_path: Path):
             con.execute("ALTER TABLE usuarios ADD COLUMN rol TEXT NOT NULL DEFAULT 'ventas'")
         if 'tema' not in current_cols:
             con.execute("ALTER TABLE usuarios ADD COLUMN tema TEXT NOT NULL DEFAULT 'claro'")
+        if 'eliminado_en' not in current_cols:
+            con.execute('ALTER TABLE usuarios ADD COLUMN eliminado_en TEXT')
+        # Una sola vez: el tema pasa a seguir al navegador ("auto") para todos; después cada uno elige.
+        con.execute('CREATE TABLE IF NOT EXISTS migraciones (clave TEXT PRIMARY KEY)')
+        if not con.execute("SELECT 1 FROM migraciones WHERE clave='tema_auto'").fetchone():
+            con.execute("UPDATE usuarios SET tema='auto'")
+            con.execute("INSERT INTO migraciones(clave) VALUES ('tema_auto')")
         if os.getenv('AUTH_ENABLED', 'false').lower() != 'true':
             return
         username = os.getenv('ADMIN_USERNAME', '').strip().lower()
@@ -75,7 +82,7 @@ def init_auth(db_path: Path):
             raise RuntimeError('AUTH_ENABLED requiere ADMIN_USERNAME y ADMIN_PASSWORD de al menos 12 caracteres')
         exists = con.execute('SELECT id FROM usuarios WHERE usuario=?', (username,)).fetchone()
         if not exists:
-            con.execute('INSERT INTO usuarios (usuario,nombre,password_hash,creado_en) VALUES (?,?,?,?)',
+            con.execute("INSERT INTO usuarios (usuario,nombre,password_hash,creado_en,tema) VALUES (?,?,?,?,'auto')",
                         (username, name, password_hash(password), now().isoformat()))
         con.execute("UPDATE usuarios SET rol='administrador' WHERE usuario=?", (username,))
         # IMPORTANTE: cambiar ADMIN_PASSWORD en Railway no cambia la contraseña de un usuario ya creado.

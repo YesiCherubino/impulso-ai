@@ -112,16 +112,28 @@ export function PlantillasPanel({ok,fail}:Msg){
 }
 
 /* ---------------------------------------------------------------- Documentos para adjuntar */
+const tipoDoc=(n:string,mime:string)=>{const e=(n.split('.').pop()||'').toLowerCase();if(e==='pdf'||mime.includes('pdf'))return 'PDF';if(['xls','xlsx','csv'].includes(e))return 'Excel';if(['doc','docx'].includes(e))return 'Word';if(['ppt','pptx'].includes(e))return 'Presentación';if(mime.startsWith('image/'))return 'Imagen';return e?e.toUpperCase():'Archivo'};
+/* Biblioteca de la empresa: lo que el equipo adjunta desde la Bandeja (clip) al responder. */
 export function DocumentosPanel({ok,fail}:Msg){
- const [list,setList]=useState<Documento[]>([]),[desc,setDesc]=useState(''),[busy,setBusy]=useState(false);
+ const [list,setList]=useState<Documento[]>([]),[busy,setBusy]=useState(false),[pend,setPend]=useState<{file:File;nombre:string;desc:string}|null>(null);
  const load=useCallback(async()=>{try{setList(await api<Documento[]>('/api/documentos'))}catch(e){fail(errText(e,'No se pudo cargar'))}},[fail]);
  useEffect(()=>{void load()},[load]);
- async function upload(e:React.ChangeEvent<HTMLInputElement>){const f=e.target.files?.[0];e.target.value='';if(!f)return;if(f.size>MAX_SUBIDA){fail('El archivo supera los 3 MB (límite del hosting de la demo).');return}setBusy(true);try{await api('/api/documentos',{method:'POST',body:JSON.stringify({nombre:f.name,descripcion:desc,mime:f.type||'application/octet-stream',contenido_base64:await leerArchivo(f)})});setDesc('');ok(`${f.name} subido`);await load()}catch(x){fail(errText(x,'No se pudo subir'))}finally{setBusy(false)}}
- async function remove(d:Documento){if(!window.confirm(`¿Eliminar ${d.nombre}? Los mensajes donde ya se adjuntó conservan el nombre.`))return;try{await api(`/api/documentos/${d.id}/borrar`,{method:'POST'});await load()}catch(e){fail(errText(e,'No se pudo eliminar'))}}
+ function pick(e:React.ChangeEvent<HTMLInputElement>){const f=e.target.files?.[0];e.target.value='';if(!f)return;if(f.size>MAX_SUBIDA){fail('El archivo supera los 3 MB (límite del hosting de la demo).');return}setPend({file:f,nombre:f.name,desc:''})}
+ async function save(e:React.FormEvent){e.preventDefault();if(!pend)return;const f=pend.file;let nombre=pend.nombre.trim()||f.name;const ext=f.name.includes('.')?f.name.slice(f.name.lastIndexOf('.')):'';if(ext&&!nombre.toLowerCase().endsWith(ext.toLowerCase()))nombre+=ext;
+  setBusy(true);try{await api('/api/documentos',{method:'POST',body:JSON.stringify({nombre,descripcion:pend.desc.trim(),mime:f.type||'application/octet-stream',contenido_base64:await leerArchivo(f)})});setPend(null);ok(`${nombre} subido`);await load()}catch(x){fail(errText(x,'No se pudo subir'))}finally{setBusy(false)}}
+ async function remove(d:Documento){if(!window.confirm(`¿Eliminar ${d.nombre}? Los mensajes donde ya se adjuntó conservan el nombre.`))return;try{await api(`/api/documentos/${d.id}/borrar`,{method:'POST'});ok(`${d.nombre} eliminado`);await load()}catch(e){fail(errText(e,'No se pudo eliminar'))}}
  async function open(d:Documento){try{abrirArchivo(await api<ArchivoB64>(`/api/documentos/${d.id}`))}catch(e){fail(errText(e,'No se pudo abrir'))}}
- return <section className="panel v2-admin-list"><div className="v3-section-line"><h3><FileText size={18}/> Documentos para adjuntar</h3></div>
-  <p className="muted">Catálogos y fichas técnicas para adjuntar desde el chat. Hasta 3 MB.</p>
-  <div className="v5-inline"><input aria-label="Descripción del documento" placeholder="Descripción (opcional), ej. Catálogo 2026" value={desc} onChange={e=>setDesc(e.target.value)}/><label className="btn btn-primary v6-file">{busy?<Loader2 size={16} className="v5-spin"/>:<Upload size={16}/>} Subir documento<input type="file" onChange={e=>void upload(e)} hidden/></label></div>
-  <div className="v3-user-list">{list.map(d=><div key={d.id} className="v3-user-row"><FileText size={18}/><div className="v3-user-data"><strong>{d.nombre}</strong><small>{[d.descripcion,tamanoTexto(d.tamano),new Date(d.creado_en).toLocaleDateString('es-AR')].filter(Boolean).join(' · ')}</small></div><button type="button" className="btn btn-outline btn-sm" onClick={()=>void open(d)}>Abrir</button><button type="button" className="v4-icon-action" aria-label={`Eliminar ${d.nombre}`} onClick={()=>void remove(d)}><Trash2 size={15}/></button></div>)}{!list.length&&<p className="muted">Todavía no hay documentos.</p>}</div>
+ return <section className="panel v2-admin-list"><div className="v3-section-line"><h3>Documentos para adjuntar</h3>{!pend&&<label className="btn btn-primary btn-sm v6-file"><Upload size={14}/> Subir documento<input type="file" onChange={pick} hidden/></label>}</div>
+  <p className="muted">Catálogos, fichas técnicas y listas de precios que el equipo adjunta desde la Bandeja, con el clip, al responder. Hasta 3 MB por archivo.</p>
+  {pend&&<form className="v9-doc-form" onSubmit={e=>void save(e)}>
+   <div className="v9-doc-file"><FileText size={18}/><span><strong>{pend.file.name}</strong><small>{tipoDoc(pend.file.name,pend.file.type)} · {tamanoTexto(pend.file.size)}</small></span></div>
+   <label>Nombre que ve el equipo<input autoFocus required maxLength={200} value={pend.nombre} onChange={e=>setPend({...pend,nombre:e.target.value})}/></label>
+   <label>Descripción (opcional)<input maxLength={300} placeholder="Ej.: Catálogo 2026 con precios mayoristas" value={pend.desc} onChange={e=>setPend({...pend,desc:e.target.value})}/></label>
+   <div className="v9-modal-actions"><button type="button" className="btn btn-outline" onClick={()=>setPend(null)} disabled={busy}>Cancelar</button><button type="submit" className="btn btn-primary" disabled={busy}>{busy?<Loader2 size={15} className="v5-spin"/>:<Upload size={15}/>} Guardar</button></div>
+  </form>}
+  {list.length?<ul className="v9-doc-list">{list.map(d=><li key={d.id}><span className="v9-doc-type">{tipoDoc(d.nombre,'')}</span>
+   <span className="v9-doc-data"><strong>{d.nombre}</strong><small>{[d.descripcion,tamanoTexto(d.tamano),new Date(d.creado_en).toLocaleDateString('es-AR',{day:'numeric',month:'short',year:'numeric'})].filter(Boolean).join(' · ')}</small></span>
+   <span className="v8-row-actions"><button type="button" className="btn btn-outline btn-sm" onClick={()=>void open(d)}><Download size={13}/> Descargar</button><button type="button" className="icon-button" title={`Eliminar ${d.nombre}`} aria-label={`Eliminar ${d.nombre}`} onClick={()=>void remove(d)}><Trash2 size={15}/></button></span></li>)}</ul>
+  :!pend&&<p className="v9-empty">Todavía no hay documentos. Subí el catálogo o la lista de precios para tenerlos a mano al responder.</p>}
  </section>;
 }

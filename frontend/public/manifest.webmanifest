@@ -3,7 +3,7 @@
   "short_name": "Impulso",
   "description": "Backoffice comercial: consultas, contactos, cotizaciones y agenda.",
   "lang": "es-AR",
-  "start_url": "/mi-dia",
+  "start_url": "/consultas",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f4f2ec",

@@ -54,7 +54,7 @@ APELLIDOS = ['López', 'Álvarez', 'Ríos', 'Molina', 'Vega', 'Ponce', 'Paz', 'A
 PRODUCTOS = ['Crema corporal de 250 ml', 'Shampoo de 350 ml', 'Acondicionador de 350 ml', 'Jabón líquido de 500 ml',
              'Máscara capilar de 300 ml', 'Crema facial de 50 ml', 'Sérum facial de 30 ml', 'Gel de ducha de 400 ml',
              'Protector labial', 'Perfume de 100 ml', 'Body splash de 200 ml', 'Crema de manos de 75 ml',
-             'Desodorante roll-on', 'Protector solar FPS 50', 'Shampoo sólido', 'Línea Dermogreen', 'Fragancias Acqua Di Fiore',
+             'Desodorante roll-on', 'Protector solar FPS 50', 'Shampoo sólido', 'Línea Marca A', 'Fragancias Marca B',
              'Alcohol en gel de 250 ml', 'Toallitas desmaquillantes', 'Aceite corporal de 120 ml']
 TIPOS = [('fabricacion_terceros', 35), ('mayorista', 25), ('desarrollo_formula', 10), ('elaboracion_envasado', 10),
          ('exportacion', 7), ('no_comercial', 8), ('sin_clasificar', 5)]
