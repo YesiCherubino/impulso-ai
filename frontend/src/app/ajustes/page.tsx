@@ -1,13 +1,14 @@
 'use client';
 import {useCallback,useEffect,useState} from 'react';
 import {Plus,UserRound,Check,X,Pencil,Trash2} from 'lucide-react';
+import Link from 'next/link';
 import Shell from '@/components/shell';
 import {SkPanel} from '@/components/skeleton';
 import {api,Rol,roleName,UsuarioSesion} from '@/lib/api';
-import {ImportPanel,EmpresaPanel,ReglasPanel,PlantillasPanel,DocumentosPanel,ChatPanel,IntegracionesPanel} from '@/components/admin-v5';
+import {ImportPanel,EmpresaPanel,ReglasPanel,PlantillasPanel,DocumentosPanel,ChatPanel} from '@/components/admin-v5';
 
 type Seccion='preferencias'|'usuarios'|'empresa'|'comercial'|'ia'|'contenido'|'chat'|'integraciones'|'datos';
-const SECCIONES:[Seccion,string,boolean][]=[['preferencias','Preferencias',false],['usuarios','Usuarios y permisos',true],['empresa','Empresa y apariencia',true],['comercial','Reglas comerciales',true],['ia','Asistente de IA',false],['contenido','Respuestas y documentos',true],['chat','Chat del equipo',true],['integraciones','Integraciones',true],['datos','Datos',true]];
+const SECCIONES:[Seccion,string,boolean][]=[['preferencias','Preferencias',false],['usuarios','Usuarios y permisos',true],['empresa','Empresa y apariencia',true],['comercial','Reglas comerciales',true],['ia','Asistente de IA',false],['contenido','Respuestas y documentos',true],['chat','Chat del equipo',true],['integraciones','Integraciones',false],['datos','Datos',true]];
 type User={id:number;username:string;name:string;role:Rol;active:boolean;theme:string;de_instalacion?:boolean};
 type AISettings={tono:'formal'|'profesional'|'cercano';tratamiento:'vos'|'tu'|'ustedes';signos_apertura:boolean;extension:'breve'|'media'|'detallada';instrucciones:string};
 type Matriz={permisos:{clave:string;nombre:string}[];perfiles:Record<'ventas'|'gerencia',Record<string,boolean>>};
@@ -40,7 +41,7 @@ export default function Ajustes(){
     {sec==='ia'&&<><MiAsistente ok={ok} fail={fail} admin={isAdmin}/>{isAdmin&&<Asistente ok={ok} fail={fail}/>}</>}
     {sec==='contenido'&&isAdmin&&<><PlantillasPanel ok={ok} fail={fail}/><DocumentosPanel ok={ok} fail={fail}/></>}
     {sec==='chat'&&isAdmin&&<ChatPanel ok={ok} fail={fail}/>}
-    {sec==='integraciones'&&isAdmin&&<IntegracionesPanel/>}
+    {sec==='integraciones'&&<section className="panel v2-admin-list"><div className="v3-section-line"><h3>Integraciones</h3></div><p className="muted">Qué se conecta hoy, qué sigue y cómo se extiende a otras áreas.</p><Link className="btn btn-outline" href="/integraciones">Ver integraciones</Link></section>}
     {sec==='datos'&&isAdmin&&<><ImportPanel ok={ok} fail={fail}/><Datos ok={ok} fail={fail}/></>}
    </div>
   </div>

@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import {usePathname,useRouter} from 'next/navigation';
 import {useEffect,useRef,useState} from 'react';
-import {Inbox,ContactRound,CalendarDays,FileCheck2,FileText,Settings,LogOut,BookOpen,Menu,X,Sun,Search,MessagesSquare,Eye,Receipt} from 'lucide-react';
+import {Inbox,ContactRound,CalendarDays,FileCheck2,FileText,Settings,LogOut,BookOpen,Menu,X,Sun,Search,MessagesSquare,Eye,Receipt,Plug} from 'lucide-react';
 import Notifications from '@/components/notifications';
 import ImpulsoMark from '@/components/impulso-mark';
 import {CargaInicial,BarraNavegacion} from '@/components/skeleton';
@@ -19,6 +19,7 @@ const nav=[
  {href:'/agenda',label:'Agenda',icon:CalendarDays},
  {href:'/finalizados',label:'Finalizados',icon:FileCheck2},
  {href:'/resumen-gerencial',label:'Reportes',icon:FileText},
+ {href:'/integraciones',label:'Integraciones',icon:Plug},
  {href:'/ajustes',label:'Ajustes',icon:Settings},
 ];
 export default function Shell({children}:{children:React.ReactNode}){
