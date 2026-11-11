@@ -187,7 +187,7 @@ def rename_username(con,old:str,new:str)->None:
 class UserCreate(BaseModel):
     username: str = Field(min_length=3,max_length=60,pattern=r'^[a-zA-Z0-9._-]+$')
     name: str = Field(min_length=2,max_length=120)
-    password: str = Field(min_length=12,max_length=200)
+    password: str = Field(min_length=8,max_length=200)
     role: Literal['ventas','administrador','gerencia'] = 'ventas'
 
 
@@ -196,7 +196,7 @@ class UserEdit(BaseModel):
     username: str|None = Field(default=None,min_length=3,max_length=60,pattern=r'^[a-zA-Z0-9._-]+$')
     role: Literal['ventas','administrador','gerencia']
     active: bool
-    password: str|None = Field(default=None,min_length=12,max_length=200)
+    password: str|None = Field(default=None,min_length=8,max_length=200)
 
 
 class ReportRequest(BaseModel):

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import {Check,ArrowRight,ArrowLeft} from 'lucide-react';
 import Shell from '@/components/shell';
+import {SkTablero} from '@/components/skeleton';
 import {api,MiDia,ActividadMiDia,TarjetaMiDia,UsuarioSesion,tiempoSinRespuesta,cotizacionTexto,estadoGestionNombre,unidades,puede} from '@/lib/api';
 
 const hora=(s:string)=>new Date(s).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
@@ -61,7 +62,7 @@ export default function MiDiaPage(){
    <div className="v7-day-actions"><Link className="btn btn-primary" href="/consultas?foco=1" title="La consulta más urgente, una tras otra (F)">Siguiente consulta</Link>
    {!!data?.usuarios.length&&<select aria-label="Ver el tablero de" value={ver||user?.username||''} onChange={e=>setVer(e.target.value===user?.username?'':e.target.value)}>{data.usuarios.map(u=><option key={u.usuario} value={u.usuario}>{u.usuario===user?.username?`${u.nombre} (yo)`:u.nombre}</option>)}{user&&!data.usuarios.some(u=>u.usuario===user.username)&&<option value={user.username}>{user.name} (yo)</option>}</select>}</div></div>
   {error&&<p className="alert error" role="alert">{error}</p>}
-  {!data?<p className="muted">Cargando…</p>:<>
+  {!data?(error?null:<SkTablero/>):<>
    <div className="v7-board">
     {column('asignadas',data.propio?'Asignadas a mí':`Asignadas a ${data.usuarios.find(u=>u.usuario===data.usuario)?.nombre||data.usuario}`,data.asignadas,data.resumen.asignadas,data.resumen.asignadas_sin_responder)}
     {column('sin_asignar','Sin asignar',data.sin_asignar,data.resumen.sin_asignar,data.resumen.sin_asignar_sin_responder)}

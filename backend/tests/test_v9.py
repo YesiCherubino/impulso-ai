@@ -119,3 +119,35 @@ def test_renombrar_usuario(tmp_path, monkeypatch):
         # Renombrarse a uno mismo no cierra la sesión.
         assert c.post(f"/api/admin/users/{admin['id']}", headers=h, json={'name': admin['name'], 'role': 'administrador', 'active': True, 'username': 'jefa'}).status_code == 200
         assert c.get('/api/auth/me', headers=h).json()['username'] == 'jefa'
+
+
+def test_clave_minimo_8(tmp_path, monkeypatch):
+    path = setup(tmp_path, monkeypatch)
+    with TestClient(create_app(path)) as c:
+        h = login(c)
+        nuevo = {'username': 'ana', 'name': 'Ana', 'role': 'ventas'}
+        assert c.post('/api/admin/users', headers=h, json={**nuevo, 'password': '1234567'}).status_code == 422
+        r = c.post('/api/admin/users', headers=h, json={**nuevo, 'password': '12345678'})
+        assert r.status_code == 201
+        assert c.post('/api/auth/login', json={'username': 'ana', 'password': '12345678'}).status_code == 200
+        uid = r.json()['id']
+        edit = {'name': 'Ana', 'role': 'ventas', 'active': True}
+        assert c.post(f'/api/admin/users/{uid}', headers=h, json={**edit, 'password': 'corta'}).status_code == 422
+        assert c.post(f'/api/admin/users/{uid}', headers=h, json={**edit, 'password': 'otraclave'}).status_code == 200
+
+
+def test_demo_con_actividad(tmp_path, monkeypatch):
+    path = setup(tmp_path, monkeypatch)
+    with TestClient(create_app(path)) as c:
+        h = login(c)
+        users(c, h)
+        r = c.post('/api/demo/seed', headers=h, json={'incluir_web': True}).json()
+        assert r['trabajadas'] >= 12
+        # Correrlo otra vez no duplica nada.
+        assert c.post('/api/demo/seed', headers=h, json={'incluir_web': True}).json()['trabajadas'] == 0
+        rep = c.get('/api/reports/summary?period=mes', headers=h).json()
+        assert rep['indicadores']['concretadas'] >= 3 and rep['monto_concretado']
+        q = c.get('/api/cotizaciones', headers=h).json()['resumen']['por_estado']
+        assert q['aceptada'] >= 3 and q['vencida'] >= 1 and q['enviada'] >= 3 and q['no_concretada'] >= 1
+        assert c.get('/api/mi-dia?usuario=lucia', headers=h).json()['resumen']['asignadas'] >= 1
+        assert len([x for x in c.get('/api/inbox', headers=h).json() if True]) >= 1

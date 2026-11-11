@@ -2,6 +2,7 @@
 import {useCallback,useEffect,useState} from 'react';
 import {Plus,UserRound,Check,X,Pencil,Trash2} from 'lucide-react';
 import Shell from '@/components/shell';
+import {SkPanel} from '@/components/skeleton';
 import {api,Rol,roleName,UsuarioSesion} from '@/lib/api';
 import {ImportPanel,EmpresaPanel,ReglasPanel,PlantillasPanel,DocumentosPanel,ChatPanel,IntegracionesPanel} from '@/components/admin-v5';
 
@@ -52,7 +53,7 @@ function Usuarios({me,ok,fail,busy,setBusy}:{me:UsuarioSesion|null;ok:(m:string)
  useEffect(()=>{void load()},[load]);
  async function add(e:React.FormEvent){e.preventDefault();setBusy(true);try{await api('/api/admin/users',{method:'POST',body:JSON.stringify(form)});setForm(blank);setNewOpen(false);ok('Usuario creado');await load()}catch(x){fail(x instanceof Error?x.message:'No se pudo crear')}finally{setBusy(false)}}
  const [edit,setEdit]=useState<{u:User;name:string;username:string;role:Rol;active:boolean;password:string}|null>(null),[undo,setUndo]=useState<{u:User;fichas:number[];activo:boolean;texto:string}|null>(null);
- async function save(e:React.FormEvent){e.preventDefault();if(!edit)return;if(edit.password&&edit.password.length<12){fail('La contraseña debe tener al menos 12 caracteres');return}
+ async function save(e:React.FormEvent){e.preventDefault();if(!edit)return;if(edit.password&&edit.password.length<8){fail('La contraseña debe tener al menos 8 caracteres');return}
   setBusy(true);try{await api(`/api/admin/users/${edit.u.id}`,{method:'POST',body:JSON.stringify({name:edit.name.trim(),username:edit.username.trim().toLowerCase(),role:edit.role,active:edit.active,password:edit.password||null})});const renamed=edit.username.trim().toLowerCase()!==edit.u.username;setEdit(null);setUndo(null);ok(renamed?(edit.u.id===me?.id?`Listo. La próxima vez entrás como ${edit.username.trim().toLowerCase()}.`:`Guardado. ${edit.name.trim()} tiene que volver a entrar como ${edit.username.trim().toLowerCase()}.`):edit.password?'Guardado. La clave nueva ya está activa.':'Guardado');await load()}catch(x){fail(x instanceof Error?x.message:'No se pudo guardar')}finally{setBusy(false)}}
  async function remove(u:User){setBusy(true);try{const r=await api<{fichas:number[];activo:boolean}>(`/api/admin/users/${u.id}/eliminar`,{method:'POST',body:'{}'});setEdit(null);ok('');
   setUndo({u,fichas:r.fichas,activo:r.activo,texto:`${u.name} fue eliminado${r.fichas.length?` y sus ${r.fichas.length} gestion${r.fichas.length===1?'':'es'} abierta${r.fichas.length===1?' quedó':'s quedaron'} sin asignar`:''}.`});await load()}catch(x){fail(x instanceof Error?x.message:'No se pudo eliminar')}finally{setBusy(false)}}
@@ -72,7 +73,7 @@ function Usuarios({me,ok,fail,busy,setBusy}:{me:UsuarioSesion|null;ok:(m:string)
     <tbody>{matriz.permisos.map(p=><tr key={p.clave}><td>{p.nombre}</td>{(['ventas','gerencia'] as const).map(r=><td key={r}><input type="checkbox" aria-label={`${p.nombre} para ${roleName[r]}`} checked={!!matriz.perfiles[r][p.clave]} onChange={e=>void toggle(r,p.clave,e.target.checked)}/></td>)}<td><input type="checkbox" checked disabled aria-label="Administrador tiene todos los permisos"/></td></tr>)}</tbody></table></div>
    <p className="muted">El perfil Administrador tiene siempre todos los permisos. Para revisar cómo queda cada perfil, usá "Ver como" en el menú lateral.</p></section>}
   {newOpen&&<div className="modal-backdrop v2-overlay" onMouseDown={()=>setNewOpen(false)}><div className="modal" role="dialog" aria-modal="true" aria-label="Nuevo usuario" onMouseDown={e=>e.stopPropagation()}><div className="modal-head"><h2>Nuevo usuario</h2><button className="icon-button" aria-label="Cerrar" onClick={()=>setNewOpen(false)}><X size={18}/></button></div>
-   <form className="fields" onSubmit={e=>void add(e)}><label>Usuario<input required minLength={3} maxLength={60} value={form.username} onChange={e=>setForm({...form,username:e.target.value})}/></label><label>Nombre<input required minLength={2} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label><label>Contraseña<input required type="password" minLength={12} value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></label><label>Perfil<select value={form.role} onChange={e=>setForm({...form,role:e.target.value as Rol})}>{Object.entries(roleName).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label><button className="btn btn-primary" type="submit" disabled={busy}>Crear usuario</button></form></div></div>}
+   <form className="fields" onSubmit={e=>void add(e)}><label>Usuario<input required minLength={3} maxLength={60} value={form.username} onChange={e=>setForm({...form,username:e.target.value})}/></label><label>Nombre<input required minLength={2} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label><label>Contraseña<input required type="password" minLength={8} value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></label><label>Perfil<select value={form.role} onChange={e=>setForm({...form,role:e.target.value as Rol})}>{Object.entries(roleName).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label><button className="btn btn-primary" type="submit" disabled={busy}>Crear usuario</button></form></div></div>}
   {edit&&<div className="modal-backdrop v2-overlay" onMouseDown={()=>setEdit(null)}><div className="modal" role="dialog" aria-modal="true" aria-label={`Editar a ${edit.u.name}`} onMouseDown={e=>e.stopPropagation()}><div className="modal-head"><h2>Editar usuario</h2><button className="icon-button" aria-label="Cerrar" onClick={()=>setEdit(null)}><X size={18}/></button></div>
    <form className="fields" onSubmit={e=>void save(e)}>
     <label>Nombre<input required minLength={2} maxLength={120} autoFocus value={edit.name} onChange={e=>setEdit({...edit,name:e.target.value})}/></label>
@@ -81,7 +82,7 @@ function Usuarios({me,ok,fail,busy,setBusy}:{me:UsuarioSesion|null;ok:(m:string)
       {edit.u.de_instalacion&&<><br/>Este es el administrador de la instalación (variable ADMIN_USERNAME en Railway). Cambiá también esa variable; si no, al reiniciar el servidor se vuelve a crear «{edit.u.username}».</>}</small>
      :<small className="muted">Con este nombre entra al sistema.</small>}</label>
     <label>Perfil<select value={edit.role} disabled={edit.u.id===me?.id} onChange={e=>setEdit({...edit,role:e.target.value as Rol})}>{Object.entries(roleName).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
-    <label>Clave nueva<input type="password" minLength={12} autoComplete="new-password" placeholder="Dejala vacía para no cambiarla" value={edit.password} onChange={e=>setEdit({...edit,password:e.target.value})}/></label>
+    <label>Clave nueva<input type="password" minLength={8} autoComplete="new-password" placeholder="Dejala vacía para no cambiarla" value={edit.password} onChange={e=>setEdit({...edit,password:e.target.value})}/></label>
     {edit.u.id!==me?.id&&<label className="v3-config-check"><input type="checkbox" checked={edit.active} onChange={e=>setEdit({...edit,active:e.target.checked})}/> Activo <small className="muted">(si lo desactivás no puede entrar; lo podés reactivar cuando quieras)</small></label>}
     <div className="v9-modal-actions">{edit.u.id!==me?.id&&<button type="button" className="btn btn-outline v9-danger" disabled={busy} onClick={()=>void remove(edit.u)}><Trash2 size={14}/> Eliminar usuario</button>}<button className="btn btn-primary" type="submit" disabled={busy}><Check size={15}/> Guardar</button></div>
    </form></div></div>}
@@ -91,7 +92,7 @@ function Usuarios({me,ok,fail,busy,setBusy}:{me:UsuarioSesion|null;ok:(m:string)
 function Asistente({ok,fail}:{ok:(m:string)=>void;fail:(m:string)=>void}){
  const [ai,setAI]=useState<AISettings|null>(null),[busy,setBusy]=useState(false);
  useEffect(()=>{void api<AISettings>('/api/ai/settings').then(setAI).catch(e=>fail(String(e)))},[fail]);
- if(!ai)return <section className="panel v2-admin-list"><p className="muted">Cargando…</p></section>;
+ if(!ai)return <section className="panel v2-admin-list"><SkPanel/></section>;
  async function save(e:React.FormEvent){e.preventDefault();setBusy(true);try{await api('/api/ai/settings',{method:'POST',body:JSON.stringify(ai)});ok('Guardado')}catch(x){fail(String(x))}finally{setBusy(false)}}
  return <section className="panel v2-admin-list"><div className="v3-section-line"><h3>Configuración de la empresa</h3></div><p className="muted">La base para todos. Las indicaciones y el tratamiento valen para todo el equipo; tono, extensión y signos, cada uno puede cambiarlos para sí.</p><form className="fields" onSubmit={e=>void save(e)}><div className="v3-fields">
   <label>Tono<select value={ai.tono} onChange={e=>setAI({...ai,tono:e.target.value as AISettings['tono']})}><option value="profesional">Profesional y cordial</option><option value="cercano">Cercano</option><option value="formal">Formal</option></select></label>
@@ -109,7 +110,7 @@ const EXTENSIONES:Record<string,string>={breve:'Breve',media:'Media',detallada:'
 function MiAsistente({ok,fail,admin}:{ok:(m:string)=>void;fail:(m:string)=>void;admin:boolean}){
  const [p,setP]=useState<MisPrefs|null>(null),[busy,setBusy]=useState(false);
  useEffect(()=>{void api<MisPrefs>('/api/ai/mis-preferencias').then(setP).catch(e=>fail(String(e)))},[fail]);
- if(!p)return <section className="panel v2-admin-list"><p className="muted">Cargando…</p></section>;
+ if(!p)return <section className="panel v2-admin-list"><SkPanel/></section>;
  const o=p.propias,b=p.base,set=(x:Partial<MisPrefs['propias']>)=>setP({...p,propias:{...o,...x}});
  async function save(e:React.FormEvent){e.preventDefault();setBusy(true);try{await api('/api/ai/mis-preferencias',{method:'POST',body:JSON.stringify(o)});ok('Guardado')}catch(x){fail(String(x))}finally{setBusy(false)}}
  const signos=o.signos_apertura===null?'':o.signos_apertura?'si':'no';
@@ -125,11 +126,11 @@ function MiAsistente({ok,fail,admin}:{ok:(m:string)=>void;fail:(m:string)=>void;
 
 function Datos({ok,fail}:{ok:(m:string)=>void;fail:(m:string)=>void}){
  const [busy,setBusy]=useState(false),[dups,setDups]=useState<{gestiones:{origen:string;destino:string;cliente:string}[];contactos:{origen:number;destino:number;cliente:string}[]}|null>(null);
- async function seed(){setBusy(true);try{const r=await api<{added:number}>('/api/demo/seed',{method:'POST',body:JSON.stringify({incluir_web:true})});ok(r.added?`${r.added} consultas agregadas`:'Ya estaban cargadas')}catch(e){fail(String(e))}finally{setBusy(false)}}
+ async function seed(){setBusy(true);try{const r=await api<{added:number;trabajadas:number}>('/api/demo/seed',{method:'POST',body:JSON.stringify({incluir_web:true})});ok(r.added||r.trabajadas?[r.added?`${r.added} consultas agregadas`:'',r.trabajadas?`${r.trabajadas} gestiones con actividad (respuestas, cotizaciones y cierres)`:''].filter(Boolean).join(' y ')+'.':'Ya estaba todo cargado.')}catch(e){fail(String(e))}finally{setBusy(false)}}
  async function preview(){setBusy(true);try{setDups(await api('/api/admin/duplicados'))}catch(e){fail(String(e))}finally{setBusy(false)}}
  async function unify(){if(!window.confirm('¿Unificar las gestiones y los contactos duplicados? No se borra nada.'))return;setBusy(true);try{const r=await api<{gestiones_fusionadas:number;contactos_unificados:number}>('/api/admin/duplicados/unificar',{method:'POST'});ok(`${r.gestiones_fusionadas} gestiones y ${r.contactos_unificados} contactos unificados`);setDups(null)}catch(e){fail(String(e))}finally{setBusy(false)}}
  return <>
-  <section className="panel v2-admin-list"><div className="v3-section-line"><h3>Datos de prueba</h3></div><p className="muted">40 consultas ficticias de WhatsApp, Email y formulario web. Si ya están cargadas no se duplican.</p><button className="btn btn-outline" disabled={busy} onClick={()=>void seed()}><Plus size={15}/> Cargar ejemplos</button></section>
+  <section className="panel v2-admin-list"><div className="v3-section-line"><h3>Datos de prueba</h3></div><p className="muted">Consultas ficticias de WhatsApp, Email y formulario web, con actividad de las últimas semanas: vendedores asignados, respuestas, cotizaciones (vigentes, vencidas y aceptadas) y cierres, para que Reportes y Cotizaciones muestren números. Solo usa consultas de prueba que nadie trabajó; si ya están cargadas no se duplican.</p><button className="btn btn-outline" disabled={busy} onClick={()=>void seed()}><Plus size={15}/> Cargar ejemplos</button></section>
   <section className="panel v2-admin-list"><div className="v3-section-line"><h3>Unificar duplicados</h3></div><p className="muted">Une gestiones abiertas y contactos de la misma empresa. No se borra nada.</p>
    <div className="v5-inline"><button className="btn btn-outline" disabled={busy} onClick={()=>void preview()}>Revisar duplicados</button>{dups&&(dups.gestiones.length||dups.contactos.length)?<button className="btn btn-primary" disabled={busy} onClick={()=>void unify()}>Unificar {dups.gestiones.length} gestiones y {dups.contactos.length} contactos</button>:null}</div>
    {dups&&!dups.gestiones.length&&!dups.contactos.length&&<p className="muted">No hay duplicados.</p>}

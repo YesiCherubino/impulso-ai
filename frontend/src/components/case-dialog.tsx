@@ -1,5 +1,6 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
+import {SkPanel} from '@/components/skeleton';
 import {X,Mail,MessageCircle,ArrowRightLeft,AlertTriangle,Sparkles,UserCheck,Archive,Merge,Send,Receipt,Forward} from 'lucide-react';
 import {api,qs,Pagina,FichaConsulta,ConsultaBandeja,TipoConsulta,tiposConsulta,Responsable,UsuarioSesion,cotizacionTexto,unidades,esCerrada,estadoGestionNombre,puede,RUBROS,ENVASES,TIPOS_CLIENTE,ETAPAS_FULL} from '@/lib/api';
 import {CaseTimeline,ProjectCard,Historial} from '@/components/case-extras';
@@ -34,7 +35,7 @@ export default function CaseDialog({fichaId,onClose,allowMove=false,readOnly=fal
  const ownerName=(u?:string)=>owners.find(o=>o.username===u)?.name||u||'Sin asignar';
  return <div className="modal-backdrop v2-overlay" onMouseDown={onClose}><div className="modal v3-case-dialog" role="dialog" aria-modal="true" aria-label="Información de la consulta" onMouseDown={e=>e.stopPropagation()}>
   <header className="v3-dialog-head"><div><small>{ficha?.codigo}</small><h2>{ficha?.titulo||'Información de la consulta'}</h2><p>{ficha?.cliente}</p></div><button className="icon-button" onClick={onClose} aria-label="Cerrar"><X/></button></header>
-  {!ficha||!fields?<p className="muted">Cargando consulta…</p>:<div className="v3-dialog-body">
+  {!ficha||!fields?<SkPanel lineas={6}/>:<div className="v3-dialog-body">
    <section className="v5-case-bar">
     <div className="v5-case-bar-item"><small>Estado</small>{readOnly?<strong>{estadoGestionNombre[ficha.estado_gestion||'sin_atender']}</strong>:<CaseStatusSelect fichaId={fichaId} value={ficha.estado_gestion||'sin_atender'} quote={{monto:ficha.cotizacion_monto,moneda:ficha.cotizacion_moneda}} onChanged={async()=>{await reload();setNotice('Estado actualizado')}} onError={setError}/>}</div>
     <div className="v5-case-bar-item"><small>Responsable</small>{readOnly?<strong>{ownerName(ficha.responsable)}</strong>:isAdmin?<select aria-label="Responsable" value={ficha.responsable||''} disabled={busy} onChange={e=>void assign(e.target.value)}><option value="">Sin asignar</option>{owners.map(o=><option key={o.username} value={o.username}>{o.name}</option>)}{ficha.responsable&&!owners.some(o=>o.username===ficha.responsable)&&<option value={ficha.responsable}>{ficha.responsable}</option>}</select>:<span className="v5-inline">{ownerName(ficha.responsable)}{user&&ficha.responsable!==user.username&&!ficha.responsable&&<button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={()=>void assign(user.username)}><UserCheck size={14}/> Asignarme</button>}{user&&ficha.responsable===user.username&&<button type="button" className="v3-text-action" disabled={busy} onClick={()=>void assign('')}>Quitarme</button>}</span>}</div>

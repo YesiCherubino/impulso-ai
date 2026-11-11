@@ -3,6 +3,7 @@ import {useCallback,useEffect,useState} from 'react';
 import Link from 'next/link';
 import {Search,FileDown,Link2,Check,Loader2,MessageSquareReply} from 'lucide-react';
 import Shell from '@/components/shell';
+import {SkFilas} from '@/components/skeleton';
 import ExportButton from '@/components/export-button';
 import CaseDialog from '@/components/case-dialog';
 import {api,qs,ArchivoB64,abrirArchivo,UsuarioSesion,Responsable,fechaCorta,puede,cotizacionTexto} from '@/lib/api';
@@ -51,13 +52,13 @@ export default function Cotizaciones(){
     </div>
    </div>
    <div className="table-scroll"><table><thead><tr><th>Cotización</th><th>Cliente</th><th className="v8-num">Total</th><th>Estado</th><th>Cotizó</th><th></th></tr></thead>
-    <tbody>{data?.items.map(i=>{const d=dias(i.vence);const abierta=i.estado==='enviada'||i.estado==='vencida';
+    <tbody>{!data&&!error&&<SkFilas cols={6}/>}{data?.items.map(i=>{const d=dias(i.vence);const abierta=i.estado==='enviada'||i.estado==='vencida';
      return <tr key={i.id} className={`v8-row ${i.estado==='reemplazada'?'is-muted':''}`} tabIndex={0} title="Abrir la gestión" onClick={()=>setSelected(i.ficha_id)} onKeyDown={e=>{if(e.key==='Enter'&&e.target===e.currentTarget)setSelected(i.ficha_id)}}>
       <td><strong>{i.numero}</strong><small>{fechaCorta(i.fecha,false)}</small></td>
       <td>{i.cliente}<small>{i.codigo}{i.titulo?` · ${i.titulo}`:''}</small></td>
       <td className="v8-num">{cotizacionTexto(i.total,i.moneda)}</td>
       <td><span className={`v8-quote-state is-${i.estado}`}>{NOMBRES[i.estado]}</span><small>{i.estado==='aceptada'?(i.aceptada_por?`por ${i.aceptada_por}`:''):i.estado==='enviada'?<span className={d<=3?'v8-soon':''}>{d<=0?'vence hoy':d===1?'vence mañana':`vence en ${d} días`}</span>:i.estado==='vencida'?`venció el ${fechaCorta(i.vence,false)}`:''}</small></td>
-      <td>{ownerName(i.creada_por)}</td>
+      <td className="v8-nowrap">{ownerName(i.creada_por).split(' ')[0]}</td>
       <td onClick={e=>e.stopPropagation()}><div className="v8-row-actions">
        <button type="button" className="icon-button" title="Abrir PDF" aria-label={`PDF de ${i.numero}`} onClick={()=>void pdf(i)}><FileDown size={15}/></button>
        {i.token&&i.estado!=='reemplazada'&&<button type="button" className="icon-button" title="Copiar enlace para el cliente" aria-label={`Copiar enlace de ${i.numero}`} onClick={()=>void copy(i)}>{copied===i.id?<Check size={15}/>:<Link2 size={15}/>}</button>}

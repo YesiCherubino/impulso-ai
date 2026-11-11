@@ -1,10 +1,11 @@
 'use client';
 import Link from 'next/link';
 import {usePathname,useRouter} from 'next/navigation';
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {Inbox,ContactRound,CalendarDays,FileCheck2,FileText,Settings,LogOut,BookOpen,Menu,X,Sun,Search,MessagesSquare,Eye,Receipt} from 'lucide-react';
 import Notifications from '@/components/notifications';
 import ImpulsoMark from '@/components/impulso-mark';
+import {CargaInicial,BarraNavegacion} from '@/components/skeleton';
 import CommandPalette from '@/components/command-palette';
 import TeamChat from '@/components/team-chat';
 import ThemeToggle,{aplicarTema} from '@/components/theme-toggle';
@@ -44,13 +45,26 @@ export default function Shell({children}:{children:React.ReactNode}){
    .catch(()=>{if(active)router.replace('/login')});
   return()=>{active=false};
  },[authEnabled,router]);
+ // Menú lateral en celular: sin scroll de la página de atrás, Esc para cerrar y arrastre hacia la izquierda.
+ const asideRef=useRef<HTMLElement|null>(null),drag=useRef<{x:number;y:number;dx:number;lock:boolean|null}|null>(null);
+ useEffect(()=>{if(!menuOpen)return;const b=document.body,h=document.documentElement,prevO=b.style.overflow,prevH=h.style.overflow;b.style.overflow='hidden';h.style.overflow='hidden';
+  const k=(e:KeyboardEvent)=>{if(e.key==='Escape')setMenuOpen(false)};window.addEventListener('keydown',k);
+  return()=>{b.style.overflow=prevO;h.style.overflow=prevH;window.removeEventListener('keydown',k)}},[menuOpen]);
+ useEffect(()=>{setMenuOpen(false)},[pathname]);
+ function touchStart(e:React.TouchEvent){if(!menuOpen)return;const t=e.touches[0];drag.current={x:t.clientX,y:t.clientY,dx:0,lock:null}}
+ function touchMove(e:React.TouchEvent){const d=drag.current;if(!d)return;const t=e.touches[0];const dx=t.clientX-d.x,dy=t.clientY-d.y;
+  if(d.lock===null&&(Math.abs(dx)>8||Math.abs(dy)>8))d.lock=Math.abs(dx)>Math.abs(dy);
+  if(d.lock){d.dx=Math.min(0,dx);if(asideRef.current){asideRef.current.style.transition='none';asideRef.current.style.transform=`translateX(${d.dx}px)`}}}
+ function touchEnd(){const d=drag.current;drag.current=null;const el=asideRef.current;if(!d||!el)return;el.style.transition='';el.style.transform='';
+  if(d.lock&&d.dx<-70)setMenuOpen(false)}
  async function signOut(){document.cookie='impulso_ver_como=; path=/; max-age=0';await fetch('/api/session/logout',{method:'POST'});router.replace('/login');router.refresh()}
- if(!sessionReady)return <div className="login-screen" style={{display:'grid',placeItems:'center',minHeight:'100vh'}}>Cargando…</div>;
+ if(!sessionReady)return <CargaInicial/>;
  const title=pathname.startsWith('/oportunidades/')?'Contacto':nav.find(n=>pathname.startsWith(n.href))?.label??'Impulso Comercial';
  const isAdmin=user?.role==='administrador'||user?.rol_real==='administrador';
  const go=(href:string)=>()=>setMenuOpen(false);
  return <div className="app-shell office-app v2-office">
-  <aside className={`sidebar ${menuOpen?'sidebar-open':''}`}>
+  <BarraNavegacion/>
+  <aside ref={asideRef} className={`sidebar ${menuOpen?'sidebar-open':''}`} onTouchStart={touchStart} onTouchMove={touchMove} onTouchEnd={touchEnd} onTouchCancel={touchEnd}>
    <div className="office-brand-row"><Link href="/consultas" className="brand v2-brand v7-brand" onClick={go('/consultas')}><span className="impulso-mark" aria-hidden="true"><ImpulsoMark/></span><span className="v10-wordmark"><strong>Impulso</strong><small>Comercial</small></span></Link><button className="office-close-menu" onClick={()=>setMenuOpen(false)} aria-label="Cerrar menú"><X size={19}/></button></div>
    <nav className="side-nav" aria-label="Navegación principal">{nav.map(item=>{const Icon=item.icon;const active=pathname.startsWith(item.href)||(item.href==='/contactos'&&pathname.startsWith('/oportunidades/'));return <Link key={item.href} href={item.href} className={active?'active':''} aria-current={active?'page':undefined} onClick={go(item.href)}><Icon size={17} strokeWidth={1.6}/><span>{item.label}</span></Link>})}</nav>
    <div className="office-sidebar-footer v2-sidebar-footer">
@@ -63,8 +77,8 @@ export default function Shell({children}:{children:React.ReactNode}){
   </aside>
   <div className="workspace">
    {user?.viendo_como&&<div className="v7-viewas" role="status"><Eye size={14}/> Estás viendo como <b>{roleName[user.viendo_como]}</b><button type="button" onClick={()=>setVerComo('')}>Volver a Administrador</button></div>}
-   <header className="topbar"><button type="button" className="mobile-nav-toggle" aria-label="Abrir navegación" onClick={()=>setMenuOpen(!menuOpen)}>{menuOpen?<X size={20}/>:<Menu size={20}/>}</button><div className="top-label">{title}</div><div className="topbar-actions"><button type="button" className="v6-search-trigger" onClick={()=>setPalette(true)} aria-label="Buscar (Ctrl+K)" title="Buscar (Ctrl+K)"><Search size={16}/><span className="v5-hide-mobile">Buscar</span><kbd className="v5-hide-mobile">Ctrl K</kbd></button><TeamChat user={user}/><Notifications/></div></header>
-   {menuOpen&&<button className="mobile-nav-shade" aria-label="Cerrar navegación" onClick={()=>setMenuOpen(false)}/>}
+   <header className="topbar"><button type="button" className="mobile-nav-toggle" aria-label="Abrir navegación" aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}><Menu size={20}/></button><div className="top-label">{title}</div><div className="topbar-actions"><button type="button" className="v6-search-trigger" onClick={()=>setPalette(true)} aria-label="Buscar (Ctrl+K)" title="Buscar (Ctrl+K)"><Search size={16}/><span className="v5-hide-mobile">Buscar</span><kbd className="v5-hide-mobile">Ctrl K</kbd></button><TeamChat user={user}/><Notifications/></div></header>
+   <button type="button" className={`mobile-nav-shade v11-shade ${menuOpen?'is-open':''}`} aria-label="Cerrar navegación" tabIndex={menuOpen?0:-1} aria-hidden={!menuOpen} onClick={()=>setMenuOpen(false)}/>
    <main className="content">{children}</main>
   </div>
   <nav className="v7-bottom-nav" aria-label="Accesos rápidos">

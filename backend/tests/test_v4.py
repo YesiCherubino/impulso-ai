@@ -140,7 +140,7 @@ def test_merge_script_unifies_demo_duplicates(tmp_path, monkeypatch):
     db = tmp_path / 'demo.sqlite3'
     with TestClient(create_app(db)) as c:
         token = c.post('/api/auth/login', json={'username': 'admin', 'password': 'una-clave-larga-segura-v4'}).json()['token']
-        assert c.post('/api/demo/seed', headers={'X-Session-Token': token}, json={'incluir_web': True}).status_code == 200
+        assert c.post('/api/demo/seed', headers={'X-Session-Token': token}, json={'incluir_web': True, 'actividad': False}).status_code == 200
     with connect(db) as con:
         before = con.execute("SELECT COUNT(*) FROM fichas_consulta WHERE cliente='Botánica Studio' AND estado_gestion<>'fusionada'").fetchone()[0]
     assert before >= 2  # V3 demo + mensaje histórico (+ contacto histórico con su gestión)

@@ -3,6 +3,7 @@ import {useCallback,useEffect,useState} from 'react';
 import {FileDown,Send,X,Info} from 'lucide-react';
 import Link from 'next/link';
 import Shell from '@/components/shell';
+import Sk,{SkPanel} from '@/components/skeleton';
 import ExportButton from '@/components/export-button';
 import {api,qs,ReportData,ReportResponse,UsuarioSesion,Responsable,estadoGestionNombre,fechaCorta,puede,cotizacionTexto,guardarArchivo} from '@/lib/api';
 
@@ -51,7 +52,7 @@ export default function Reportes(){
      const v=monto?montos.length:(data?.indicadores[t.k]??null);
      const cls=v===null?'':v===0?'is-zero':t.alerta?`is-${t.alerta}`:'';
      return <button type="button" key={t.k} className={`v8-stat ${cls}`} onClick={()=>void show([t.k,t.n])}><small>{t.n}</small>
-      {monto?<strong className="v8-money">{montos.length?montos.map(([m,x])=><span key={m}><em>{m}</em> {compacto(x)}</span>):'—'}</strong>:<strong>{v??'—'}</strong>}</button>})}</div></section>)}</div>
+      {monto?<strong className="v8-money">{montos.length?montos.map(([m,x])=><span key={m}><em>{m}</em> {compacto(x)}</span>):(data?'—':<Sk w={80} h={18}/>)}</strong>:<strong>{v??<Sk w={36} h={22}/>}</strong>}</button>})}</div></section>)}</div>
   </section>
   {puede(user,'reporte_ia')&&<section className="panel v7-ai-report"><h2>Reportes con IA</h2>
    <form className="v7-ask" onSubmit={e=>void ask(e)}><input aria-label="Pedí un reporte" placeholder={todos?'Pedí un reporte: “resumen del mes por vendedor”':'Pedí un reporte sobre tus gestiones'} value={prompt} onChange={e=>setPrompt(e.target.value)} maxLength={1000}/><button type="submit" className="btn btn-primary" disabled={busy||!prompt.trim()}><Send size={15}/> {busy?'Generando…':'Generar'}</button></form>
@@ -60,7 +61,7 @@ export default function Reportes(){
   </section>}
   {open&&<div className="modal-backdrop v2-overlay" onMouseDown={()=>setOpen(null)}><div className="modal v7-detail" role="dialog" aria-modal="true" aria-label={open[1]} onMouseDown={e=>e.stopPropagation()}>
    <div className="modal-head"><h2>{open[1]}{detalle?<small> · {detalle.total}</small>:null}</h2><button className="icon-button" aria-label="Cerrar" onClick={()=>setOpen(null)}><X size={18}/></button></div>
-   {!detalle?<p className="muted">Cargando…</p>:detalle.items.length?<ul className="v7-detail-list">{detalle.items.map((i,n)=><li key={n}><Link href={href(i)}><span className="v7-what"><strong>{i.cliente}</strong><small>{[i.codigo,i.titulo].filter(Boolean).join(' · ')}</small></span><span className="v7-detail-meta">{i.estado_gestion&&<span>{estadoGestionNombre[i.estado_gestion]||i.estado_gestion}</span>}{i.monto!=null&&i.moneda&&<span>{cotizacionTexto(i.monto,i.moneda)}</span>}<span>{ownerName(i.responsable)}</span><span>{fechaCorta(i.fecha)}</span></span></Link></li>)}</ul>:<p className="muted">Sin gestiones.</p>}
+   {!detalle?<SkPanel lineas={5}/>:detalle.items.length?<ul className="v7-detail-list">{detalle.items.map((i,n)=><li key={n}><Link href={href(i)}><span className="v7-what"><strong>{i.cliente}</strong><small>{[i.codigo,i.titulo].filter(Boolean).join(' · ')}</small></span><span className="v7-detail-meta">{i.estado_gestion&&<span>{estadoGestionNombre[i.estado_gestion]||i.estado_gestion}</span>}{i.monto!=null&&i.moneda&&<span>{cotizacionTexto(i.monto,i.moneda)}</span>}<span>{ownerName(i.responsable)}</span><span>{fechaCorta(i.fecha)}</span></span></Link></li>)}</ul>:<p className="muted">Sin gestiones.</p>}
    {detalle&&detalle.total>detalle.items.length&&<p className="v7-note">Se muestran {detalle.items.length} de {detalle.total}.</p>}
   </div></div>}
  </Shell>;

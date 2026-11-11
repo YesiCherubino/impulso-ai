@@ -78,8 +78,8 @@ def init_auth(db_path: Path):
         username = os.getenv('ADMIN_USERNAME', '').strip().lower()
         password = os.getenv('ADMIN_PASSWORD', '')
         name = os.getenv('ADMIN_DISPLAY_NAME', 'Administrador comercial').strip()
-        if not username or len(password) < 12:
-            raise RuntimeError('AUTH_ENABLED requiere ADMIN_USERNAME y ADMIN_PASSWORD de al menos 12 caracteres')
+        if not username or len(password) < 8:
+            raise RuntimeError('AUTH_ENABLED requiere ADMIN_USERNAME y ADMIN_PASSWORD de al menos 8 caracteres')
         exists = con.execute('SELECT id FROM usuarios WHERE usuario=?', (username,)).fetchone()
         if not exists:
             con.execute("INSERT INTO usuarios (usuario,nombre,password_hash,creado_en,tema) VALUES (?,?,?,?,'auto')",

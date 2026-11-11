@@ -3,6 +3,7 @@ import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {Check,ChevronDown,ChevronRight,FileText,Mail,MessageCircle,Plus,Search,X,CalendarDays,MoreHorizontal,FolderOpen,Send,AlertTriangle,UserCheck,Archive,RotateCcw,Sparkles,Clock3,EyeOff,History,Loader2,Paperclip,Receipt,StickyNote,Languages,Wand2,ListChecks,Forward,Undo2,MessagesSquare,Link2,FileDown} from 'lucide-react';
 import Link from 'next/link';
 import Shell from '@/components/shell';
+import Sk,{SkConversaciones,SkChat} from '@/components/skeleton';
 import CaseDialog from '@/components/case-dialog';
 import CaseStatusSelect from '@/components/case-status';
 import QuoteDialog from '@/components/quote-dialog';
@@ -187,10 +188,11 @@ export default function BandejaConsultas(){
    <select aria-label="Filtro por tipo de servicio" value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}><option value="todos">Todos los servicios</option>{tiposConsulta.map(([k,v])=><option key={k} value={k}>{v}</option>)}</select>
    <select aria-label="Orden" value={order} onChange={e=>setOrder(e.target.value as 'reciente'|'prioridad')}><option value="reciente">Más reciente</option><option value="prioridad">Prioridad</option></select>
   </div></div>
- <div className="v5-list-meta" aria-live="polite">{listLoading?'Cargando…':`${total.toLocaleString('es-AR')} conversaci${total===1?'ón':'ones'}${items.length<total?` · mostrando ${items.length.toLocaleString('es-AR')}`:''}`}</div>
+ <div className="v5-list-meta" aria-live="polite">{listLoading?'\u00a0':`${total.toLocaleString('es-AR')} conversaci${total===1?'ón':'ones'}${items.length<total?` · mostrando ${items.length.toLocaleString('es-AR')}`:''}`}</div>
  <div className="v3-conversations">{items.map(t=>{const g=t.gestion;return <button key={t.key} className={`v3-conversation ${t.no_leidos?'is-unread':''} ${lowPriority(t)?'is-low':''} ${items[focusIdx]?.key===t.key?'is-focused':''}`} data-key={t.key} onClick={()=>void openConversation(t.key)}><span className="v3-conversation-icon"><MessageCircle size={20}/></span><span className="v3-conversation-body"><span className="v3-conversation-top"><strong>{t.cliente}</strong><small>{dt(t.ultimo)}</small></span><small>{t.contacto} · {t.mensajes_count} mensaje{t.mensajes_count===1?'':'s'}{g?` · ${g.codigo}`:''}</small>
    {g&&<span className="v5-chips"><span className={`v5-chip is-state is-${g.estado_gestion}`}>{estadoGestionNombre[g.estado_gestion]||g.estado_gestion}</span>{g.tipo_consulta!=='sin_clasificar'&&<span className="v5-chip">{tipoConsultaNombre[g.tipo_consulta]}{g.tipo_sugerido_ia?' · IA':''}</span>}{g.cantidad!=null&&<span className="v5-chip">{unidades(g.cantidad)}</span>}<span className="v5-chip">{g.responsable?ownerName(g.responsable):'Sin asignar'}</span>{g.bajo_minimo&&<span className="v5-chip is-warning">Bajo mínimo</span>}{t.respuesta.pendiente&&<span className={`v5-chip ${t.respuesta.horas>=24?'is-danger':'is-attention'}`}><Clock3 size={11}/> Sin responder {tiempoSinRespuesta(t.respuesta.horas)}</span>}{t.mensaje_tras_cierre&&<span className="v5-chip is-attention">Nuevo mensaje en gestión cerrada</span>}</span>}
    <span>{t.ultimo_saliente?'Vos: ':''}{t.ultimo_texto}</span></span>{t.no_leidos>0&&<b className="v3-unread-count">{t.no_leidos}</b>}<ChevronRight size={17}/></button>})}
+  {listLoading&&!items.length&&<SkConversaciones/>}
   {!listLoading&&!items.length&&<div className="v3-empty">No hay conversaciones para estos filtros.</div>}
   {items.length<total&&<button type="button" className="btn btn-outline v5-load-more" onClick={()=>void loadMore()} disabled={moreLoading}>{moreLoading?<><Loader2 size={15} className="v5-spin"/> Cargando…</>:`Cargar ${Math.min(PAGE,total-items.length)} más`}</button>}
  </div></section>
@@ -199,7 +201,7 @@ export default function BandejaConsultas(){
   <div className="v3-thread-modal v4-chat-modal" role="dialog" aria-modal="true" aria-label={`Conversación con ${detail?.cliente||''}`} onMouseDown={e=>e.stopPropagation()}>
    <header className="v4-chat-header">
     <span className="v4-chat-avatar" aria-hidden="true">{(detail?.cliente||'·').charAt(0).toUpperCase()}</span>
-    <div className="v4-chat-person"><h2>{detail?.cliente||'Cargando…'}</h2><small>{detail?`${detail.contacto} · ${detail.mensajes_count} mensaje${detail.mensajes_count!==1?'s':''}`:''}</small></div>
+    <div className="v4-chat-person"><h2>{detail?.cliente||<Sk w={160} h={16}/>}</h2><small>{detail?`${detail.contacto} · ${detail.mensajes_count} mensaje${detail.mensajes_count!==1?'s':''}`:''}</small></div>
     {detail&&activeMessage&&<button type="button" className="btn btn-outline btn-sm" aria-label="Informe de la consulta" aria-busy={generating==='report'} onClick={()=>{if(analysis)setShowReport(v=>!v);else void generate('report')}} disabled={busy}><FileText size={15}/> <span className="v5-hide-mobile">{generating==='report'?'Generando…':showReport?'Ocultar informe':'Informe'}</span></button>}
     {detail&&currentCase&&!readonly&&!esCerrada(currentCase.estado_gestion)&&<button type="button" className="btn btn-outline btn-sm" onClick={()=>setQuoteCase(currentCase.id)} title="Armar una cotización para esta gestión"><Receipt size={15}/> <span className="v5-hide-mobile">Cotizar</span></button>}
     {detail&&<div className="v4-more-wrap">
@@ -218,7 +220,7 @@ export default function BandejaConsultas(){
     {foco&&<button type="button" className="btn btn-outline btn-sm v7-next" onClick={()=>void nextConsulta()}>Siguiente</button>}
     <button className="v4-icon-action" type="button" aria-label="Cerrar conversación" onClick={closeThread}><X size={19}/></button>
    </header>
-   {!detail?<div className="v4-chat-transcript v5-center"><Loader2 className="v5-spin"/> Cargando conversación…</div>:<>
+   {!detail?<div className="v4-chat-transcript"><SkChat/></div>:<>
    <div className="v4-chat-context">
     <div className="v4-case-selector-wrap">
      <button className="v4-case-trigger" type="button" aria-expanded={caseMenu} onClick={()=>{setCaseMenu(v=>!v);setMoreMenu(false)}}>

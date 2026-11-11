@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import {SkPanel} from '@/components/skeleton';
 import {useParams} from 'next/navigation';
 import {useCallback,useEffect,useState} from 'react';
 import {ArrowLeft,CalendarDays,ChevronDown,ContactRound,History,MessageCircle} from 'lucide-react';
@@ -37,7 +38,7 @@ export default function DetailPage(){
  return <Shell>
   <div className="v4-contact-page">
    <Link href={fichas.length&&!activeCases.length?'/finalizados':'/contactos'} className="v4-back-link"><ArrowLeft size={16}/> Volver a fichas</Link>
-   {loading&&<div className="panel empty">Cargando ficha...</div>}{error&&<p className="alert error" role="alert">{error}</p>}
+   {loading&&<div className="panel"><SkPanel lineas={6}/></div>}{error&&<p className="alert error" role="alert">{error}</p>}
    {data&&<>
     <header className="v4-contact-header">
      <div className="v4-contact-intro"><span className="v4-contact-avatar" aria-hidden="true">{data.cliente.charAt(0).toUpperCase()}</span><div><h1>{data.cliente}</h1><p>{[data.contacto,data.email||data.telefono].filter(Boolean).join(' · ')}</p></div></div>

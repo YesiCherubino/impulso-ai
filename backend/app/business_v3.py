@@ -111,6 +111,7 @@ class ChecklistData(BaseModel):
 
 class DemoSeed(BaseModel):
     incluir_web: bool=True
+    actividad: bool = True
 
 
 DEMO_CONTACTS = [
@@ -476,5 +477,7 @@ def register_business_v3(app:FastAPI,db_path:Path):
         with connect(db_path) as con:
             con.execute('BEGIN IMMEDIATE')
             added=seed_demo_v3(con,include_web=payload.incluir_web)
+            from .demo_actividad import seed_actividad
+            trabajadas=seed_actividad(con) if payload.actividad else 0
             total=con.execute('SELECT COUNT(*) FROM fixtures_v3').fetchone()[0]
-        return {'added':added,'demo_messages':total,'whatsapp':15,'email':15,'web':5 if payload.incluir_web else 0,'casos_rubro':5 if payload.incluir_web else 0}
+        return {'added':added,'trabajadas':trabajadas,'demo_messages':total,'whatsapp':15,'email':15,'web':5 if payload.incluir_web else 0,'casos_rubro':5 if payload.incluir_web else 0}

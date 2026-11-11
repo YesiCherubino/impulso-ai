@@ -1,5 +1,6 @@
 'use client';
 import {useCallback,useEffect,useState} from 'react';
+import {SkPanel} from '@/components/skeleton';
 import {Upload,FileSpreadsheet,Check,Loader2,Trash2,Plus,FileText,Download} from 'lucide-react';
 import {api,ArchivoB64,guardarArchivo,abrirArchivo,leerArchivo,tamanoTexto,Documento,Plantilla,Empresa} from '@/lib/api';
 
@@ -41,7 +42,7 @@ export function ImportPanel({ok,fail}:Msg){
 export function EmpresaPanel({ok,fail}:Msg){
  const [e,setE]=useState<Empresa|null>(null),[busy,setBusy]=useState(false);
  useEffect(()=>{void api<Empresa>('/api/empresa').then(setE).catch(x=>fail(errText(x,'No se pudo cargar')))},[fail]);
- if(!e)return <section className="panel v2-admin-list"><p className="muted">Cargando…</p></section>;
+ if(!e)return <section className="panel v2-admin-list"><SkPanel/></section>;
  const set=(k:keyof Empresa,v:string|number)=>setE({...e,[k]:v});
  async function save(ev:React.FormEvent){ev.preventDefault();if(!e)return;setBusy(true);try{const saved=await api<Empresa>('/api/empresa',{method:'POST',body:JSON.stringify(e)});setE({...e,...saved});
   if(saved.color_acento){document.documentElement.style.setProperty('--brand',saved.color_acento);try{localStorage.setItem('impulso-brand',saved.color_acento)}catch{/* sin almacenamiento */}}ok('Guardado')}catch(x){fail(errText(x,'No se pudo guardar'))}finally{setBusy(false)}}
@@ -60,7 +61,7 @@ export function EmpresaPanel({ok,fail}:Msg){
 export function ReglasPanel({ok,fail}:Msg){
  const [e,setE]=useState<Empresa|null>(null),[lote,setLote]=useState(''),[busy,setBusy]=useState(false);
  useEffect(()=>{void Promise.all([api<Empresa>('/api/empresa'),api<{lote_minimo:number}>('/api/commercial/settings')]).then(([x,c])=>{setE(x);setLote(String(c.lote_minimo))}).catch(x=>fail(errText(x,'No se pudo cargar')))},[fail]);
- if(!e)return <section className="panel v2-admin-list"><p className="muted">Cargando…</p></section>;
+ if(!e)return <section className="panel v2-admin-list"><SkPanel/></section>;
  async function save(ev:React.FormEvent){ev.preventDefault();if(!e)return;setBusy(true);try{await api('/api/commercial/settings',{method:'POST',body:JSON.stringify({lote_minimo:Number(lote)})});await api('/api/empresa',{method:'POST',body:JSON.stringify(e)});ok('Guardado')}catch(x){fail(errText(x,'No se pudo guardar'))}finally{setBusy(false)}}
  return <section className="panel v2-admin-list"><div className="v3-section-line"><h3>Reglas comerciales</h3></div>
   <form className="fields" onSubmit={ev=>void save(ev)}><div className="v3-fields">
