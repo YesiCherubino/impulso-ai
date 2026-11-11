@@ -46,12 +46,12 @@ export default function Shell({children}:{children:React.ReactNode}){
  },[authEnabled,router]);
  async function signOut(){document.cookie='impulso_ver_como=; path=/; max-age=0';await fetch('/api/session/logout',{method:'POST'});router.replace('/login');router.refresh()}
  if(!sessionReady)return <div className="login-screen" style={{display:'grid',placeItems:'center',minHeight:'100vh'}}>Cargando…</div>;
- const title=pathname.startsWith('/oportunidades/')?'Contacto':nav.find(n=>pathname.startsWith(n.href))?.label??'Impulso';
+ const title=pathname.startsWith('/oportunidades/')?'Contacto':nav.find(n=>pathname.startsWith(n.href))?.label??'Impulso Comercial';
  const isAdmin=user?.role==='administrador'||user?.rol_real==='administrador';
  const go=(href:string)=>()=>setMenuOpen(false);
  return <div className="app-shell office-app v2-office">
   <aside className={`sidebar ${menuOpen?'sidebar-open':''}`}>
-   <div className="office-brand-row"><Link href="/consultas" className="brand v2-brand v7-brand" onClick={go('/consultas')}><span className="impulso-mark" aria-hidden="true"><ImpulsoMark/></span><strong>Impulso</strong></Link><button className="office-close-menu" onClick={()=>setMenuOpen(false)} aria-label="Cerrar menú"><X size={19}/></button></div>
+   <div className="office-brand-row"><Link href="/consultas" className="brand v2-brand v7-brand" onClick={go('/consultas')}><span className="impulso-mark" aria-hidden="true"><ImpulsoMark/></span><span className="v10-wordmark"><strong>Impulso</strong><small>Comercial</small></span></Link><button className="office-close-menu" onClick={()=>setMenuOpen(false)} aria-label="Cerrar menú"><X size={19}/></button></div>
    <nav className="side-nav" aria-label="Navegación principal">{nav.map(item=>{const Icon=item.icon;const active=pathname.startsWith(item.href)||(item.href==='/contactos'&&pathname.startsWith('/oportunidades/'));return <Link key={item.href} href={item.href} className={active?'active':''} aria-current={active?'page':undefined} onClick={go(item.href)}><Icon size={17} strokeWidth={1.6}/><span>{item.label}</span></Link>})}</nav>
    <div className="office-sidebar-footer v2-sidebar-footer">
     <ThemeToggle userTheme={user?.theme} authenticated={!!user} onThemeSaved={t=>setUser(o=>o?{...o,theme:t}:o)}/>

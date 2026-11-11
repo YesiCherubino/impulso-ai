@@ -78,7 +78,7 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
                 raise HTTPException(429, 'Se alcanzó el límite diario de análisis con IA para esta demo')
             con.execute('INSERT INTO ai_quota(dia, usados) VALUES (?, 1) ON CONFLICT(dia) DO UPDATE SET usados = usados + 1', (today,))
 
-    app = FastAPI(title="Impulso — API Comercial", version="0.1.0", lifespan=lifespan,
+    app = FastAPI(title="Impulso Comercial — API", version="0.1.0", lifespan=lifespan,
                   description="Demo de gestión de oportunidades de venta. Todos los datos son ficticios.")
     origins = [x.strip() for x in os.getenv('CORS_ORIGINS', '').split(',') if x.strip()]
     if not origins:

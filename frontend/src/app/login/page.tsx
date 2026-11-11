@@ -36,7 +36,7 @@ export default function Login(){
   finally{setBusy(false)}
  }
  return <main className="login-screen"><div className="login-theme-control"><ThemeToggle/></div><form className="login-panel" onSubmit={signIn}>
-  <div className="login-brand"><span className="login-mark"><ImpulsoMark size={30}/></span><strong>Impulso</strong></div>
+  <div className="login-brand"><span className="login-mark"><ImpulsoMark size={30}/></span><span className="v10-wordmark"><strong>Impulso</strong><small>Comercial</small></span></div>
   <label htmlFor="usuario">Usuario</label>
   <input id="usuario" name="username" autoComplete="username" required maxLength={120} value={username} onChange={e=>{setUsername(e.target.value);if(error)setError('')}}/>
   <label htmlFor="password">Contraseña</label>

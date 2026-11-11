@@ -641,3 +641,9 @@ html[data-theme] .office-app.v2-office .v9-danger:hover{background:color-mix(in 
 .v9-doc-data small{font-size:12px;color:var(--ink-3)}
 .v9-empty{margin:4px 0 0;padding:16px;border:1px dashed var(--line-2);border-radius:8px;color:var(--ink-3);font-size:13px;text-align:center}
 @media(max-width:600px){.v9-doc-list li{grid-template-columns:minmax(0,1fr) auto}.v9-doc-type{display:none}}
+
+/* ---------- V10: marca "Impulso Comercial" ---------- */
+.v10-wordmark{display:grid;line-height:1}
+.v10-wordmark small{font-size:10px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);margin-top:4px;padding-left:1px}
+html[data-theme] .login-brand .v10-wordmark small{font-size:11px;color:var(--l-muted)}
+.v9-warn{display:block;margin-top:2px;padding:8px 10px;border-radius:6px;font-size:12px;line-height:1.45;color:var(--ink);background:color-mix(in oklab,var(--warn) 14%,transparent);border:1px solid color-mix(in oklab,var(--warn) 35%,transparent)}

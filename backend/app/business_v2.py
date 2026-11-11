@@ -159,6 +159,31 @@ class MoveMessage(BaseModel):
     ficha_id: int|None = None
 
 
+# Dónde se guarda el nombre de usuario (tabla, columna). Al renombrar se actualiza todo en la misma transacción.
+REFERENCIAS_USUARIO=(('usuarios','usuario'),('oportunidades','responsable'),('fichas_consulta','responsable'),
+    ('fichas_consulta','primera_respuesta_usuario'),('bandeja_consultas','usuario'),('actividades_comerciales','responsable'),
+    ('cotizaciones','creada_por'),('notas_internas','usuario'),('documentos','subido_por'),('metas','usuario'),
+    ('chat_mensajes','usuario'),('chat_lecturas','usuario'),('usuarios_estado','usuario'),('gestion_eventos','usuario'),
+    ('ia_preferencias_usuario','usuario'),('auth_intentos','usuario'))
+
+
+def rename_username(con,old:str,new:str)->None:
+    """Cambia un nombre de usuario en todas sus referencias. Debe correr dentro de una transacción."""
+    from .equipo import dm_key
+    for table,col in REFERENCIAS_USUARIO:
+        cols={r[1] for r in con.execute(f'PRAGMA table_info({table})')}
+        if col in cols:
+            con.execute(f'UPDATE {table} SET {col}=? WHERE LOWER({col})=LOWER(?)',(new,old))
+    # El historial guarda a quién se asignó cada gestión.
+    con.execute("UPDATE gestion_eventos SET valor=? WHERE tipo='responsable' AND LOWER(valor)=LOWER(?)",(new,old))
+    # Los canales directos se identifican por los dos usuarios.
+    for c in con.execute("SELECT id,clave FROM chat_canales WHERE clave LIKE 'dm:%'").fetchall():
+        a,b=c['clave'][3:].split('|',1)
+        if old.lower() in (a.lower(),b.lower()):
+            other=b if a.lower()==old.lower() else a
+            con.execute('UPDATE chat_canales SET clave=? WHERE id=?',(dm_key(new,other),c['id']))
+
+
 class UserCreate(BaseModel):
     username: str = Field(min_length=3,max_length=60,pattern=r'^[a-zA-Z0-9._-]+$')
     name: str = Field(min_length=2,max_length=120)
@@ -168,6 +193,7 @@ class UserCreate(BaseModel):
 
 class UserEdit(BaseModel):
     name: str = Field(min_length=2,max_length=120)
+    username: str|None = Field(default=None,min_length=3,max_length=60,pattern=r'^[a-zA-Z0-9._-]+$')
     role: Literal['ventas','administrador','gerencia']
     active: bool
     password: str|None = Field(default=None,min_length=12,max_length=200)
@@ -202,7 +228,8 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
     def users(request:Request):
         current(request,db_path,'administrador')
         with connect(db_path) as con:
-            return [dict(r) for r in con.execute('SELECT id,usuario AS username,nombre AS name,rol AS role,activo AS active,tema AS theme,creado_en FROM usuarios WHERE eliminado_en IS NULL ORDER BY nombre')]
+            env_admin=os.getenv('ADMIN_USERNAME','').strip().lower()
+            return [{**dict(r),'de_instalacion':r['username']==env_admin} for r in con.execute('SELECT id,usuario AS username,nombre AS name,rol AS role,activo AS active,tema AS theme,creado_en FROM usuarios WHERE eliminado_en IS NULL ORDER BY nombre')]
 
     @app.post('/api/admin/users',status_code=201)
     def create_user(request:Request,payload:UserCreate):
@@ -220,20 +247,30 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
     def edit_user(request:Request,id_:int,payload:UserEdit):
         me=current(request,db_path,'administrador')
         with connect(db_path) as con:
-            old=con.execute('SELECT id,rol FROM usuarios WHERE id=? AND eliminado_en IS NULL',(id_,)).fetchone()
+            con.execute('BEGIN IMMEDIATE')
+            old=con.execute('SELECT id,rol,usuario FROM usuarios WHERE id=? AND eliminado_en IS NULL',(id_,)).fetchone()
             if not old:raise HTTPException(404,'Usuario no encontrado')
-            if id_==me['id'] and (payload.role!='administrador' or not payload.active):
+            nuevo=(payload.username or '').strip().casefold()
+            renombrado=bool(nuevo) and nuevo!=old['usuario']
+            if renombrado:
+                taken=con.execute('SELECT eliminado_en FROM usuarios WHERE usuario=? AND id<>?',(nuevo,id_)).fetchone()
+                if taken:raise HTTPException(409,'Ese nombre de usuario perteneció a un usuario eliminado; elegí otro' if taken['eliminado_en'] else 'Ese nombre de usuario ya está en uso')
+            if id_==(me['id'] if me else None) and (payload.role!='administrador' or not payload.active):
                 raise HTTPException(400,'No podés quitarte tu propio acceso de administración')
             if old['rol']=='administrador' and (payload.role!='administrador' or not payload.active):
                 count=con.execute("SELECT COUNT(*) FROM usuarios WHERE rol='administrador' AND activo=1").fetchone()[0]
                 if count<=1:raise HTTPException(400,'Debe quedar al menos un administrador activo')
             con.execute('UPDATE usuarios SET nombre=?,rol=?,activo=? WHERE id=?',
                         (payload.name,payload.role,int(payload.active),id_))
+            if renombrado:
+                rename_username(con,old['usuario'],nuevo)
+                # Quien fue renombrado vuelve a entrar con el nombre nuevo; si es uno mismo, sigue con su sesión.
+                if not me or id_!=me['id']:con.execute('DELETE FROM sesiones WHERE usuario_id=?',(id_,))
             if payload.password:
                 con.execute('UPDATE usuarios SET password_hash=? WHERE id=?',
                             (auth.password_hash(payload.password),id_))
                 con.execute('DELETE FROM sesiones WHERE usuario_id=?',(id_,))
-            return {'ok':True}
+            return {'ok':True,'username':nuevo if renombrado else old['usuario']}
 
     @app.post('/api/admin/users/{id_}/eliminar')
     def delete_user(request:Request,id_:int):
@@ -547,6 +584,6 @@ def register_business_v2(app:FastAPI, db_path:Path, reserve_ai_call):
              ('GRID',(0,0),(-1,-1),.25,colors.HexColor('#cbd5d8')),
              ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),9),
              ('VALIGN',(0,0),(-1,-1),'TOP'),('BOTTOMPADDING',(0,0),(-1,-1),7)]))
-        elems += [table,Spacer(1,12),Paragraph('Fuente: registros de Impulso. No incluye mensajes externos aún no integrados.',normal)]
+        elems += [table,Spacer(1,12),Paragraph('Fuente: registros de Impulso Comercial. No incluye mensajes externos aún no integrados.',normal)]
         doc.build(elems)
         return {'filename':'impulso-reporte-'+date.today().isoformat()+'.pdf','pdf_base64':base64.b64encode(stream.getvalue()).decode('ascii')}
